@@ -2,31 +2,37 @@ pub type Predicate = usize;
 pub type Constant = usize;
 pub type Variable = usize;
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum Term {
     Constant(Constant),
     Variable(Variable),
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Literal {
     pub predicate: Predicate,
     pub terms: Vec<Term>,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Clause {
     pub head: Option<Literal>,
     pub body: Vec<Literal>,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Fact {
     pub predicate: Predicate,
     pub terms: Vec<Constant>,
 }
 
 impl Clause {
+    pub fn new_from_vec(head: Literal, body: Vec<Literal>) -> Self {
+        Clause {
+            head: Some(head),
+            body: body,
+        }
+    }
     pub fn is_valid(&self) -> bool {
         if let Some(ref head) = self.head {
             for lit in self.body.iter() {
@@ -79,5 +85,39 @@ impl Clause {
             }
         }
         return false;
+    }
+
+    pub fn max_predicate(&self) -> Predicate {
+        let mut max = 0;
+        if let Some(ref head) = self.head {
+            if head.predicate > max {
+                max = head.predicate;
+            }
+        }
+        for term in self.body.iter() {
+            if term.predicate > max {
+                max = term.predicate;
+            }
+        }
+        return max;
+    }
+}
+
+impl Literal {
+    pub fn new_from_vec(predicate: Predicate, terms: Vec<Term>) -> Self {
+        Literal {
+            predicate: predicate,
+            terms: terms,
+        }
+    }
+}
+
+
+impl Fact {
+    pub fn new_from_vec(predicate: Predicate, terms: Vec<Constant>) -> Self {
+        Fact {
+            predicate: predicate,
+            terms: terms,
+        }
     }
 }

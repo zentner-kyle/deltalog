@@ -1,15 +1,20 @@
-use std::collections::{HashMap};
+use std::collections::hash_map::{HashMap};
 
-use types::{Clause};
+use types::{Clause, ClauseIndex, Predicate};
 
+#[derive(Debug)]
 pub struct Program {
     pub clauses: Vec<Clause>,
+    pub predicate_names: HashMap<Predicate, String>,
+    pub clause_variable_names: HashMap<ClauseIndex, Vec<String>>,
 }
 
 impl Program {
     pub fn new() -> Self {
         Program {
-            clauses: Vec::new()
+            clauses: Vec::new(),
+            predicate_names: HashMap::new(),
+            clause_variable_names: HashMap::new(),
         }
     }
 

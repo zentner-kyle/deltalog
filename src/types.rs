@@ -1,6 +1,7 @@
 pub type Predicate = usize;
 pub type Constant = usize;
 pub type Variable = usize;
+pub type ClauseIndex = usize;
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum Term {
@@ -33,27 +34,10 @@ impl Clause {
             body: body,
         }
     }
+
     pub fn is_valid(&self) -> bool {
-        if let Some(ref head) = self.head {
-            for lit in self.body.iter() {
-                for term in lit.terms.iter() {
-                    if let &Term::Variable(_) = term {
-                        let mut found_in_head = false;
-                        for h_term in head.terms.iter() {
-                            if term == h_term {
-                                found_in_head = true;
-                                break;
-                            }
-                        }
-                        if !found_in_head {
-                            return false;
-                        }
-                    }
-                }
-            }
-        }
-        for vrb in 0..self.num_variables() {
-            if !self.has_variable(vrb) {
+        for var in 0..self.num_variables() {
+            if !self.contains_variable_in_body(var) {
                 return false;
             }
         }
@@ -62,11 +46,11 @@ impl Clause {
 
     pub fn num_variables(&self) -> usize {
         let mut count = 0;
-        if let Some(ref head) = self.head {
-            for term in head.terms.iter() {
-                if let &Term::Variable(vrb) = term {
-                    if vrb + 1 > count {
-                        count = vrb + 1;
+        for lit in &self.body {
+            for term in &lit.terms {
+                if let &Term::Variable(var) = term {
+                    if var + 1 > count {
+                        count = var + 1;
                     }
                 }
             }
@@ -74,14 +58,22 @@ impl Clause {
         return count;
     }
 
-    pub fn has_variable(&self, variable: Variable) -> bool {
+    pub fn contains_variable(&self, variable: Variable) -> bool {
         if let Some(ref head) = self.head {
-            for term in head.terms.iter() {
-                if let &Term::Variable(vrb) = term {
-                    if vrb == variable {
-                        return true;
-                    }
-                }
+            if head.contains_variable(variable) {
+                return true;
+            }
+        }
+        if self.contains_variable_in_body(variable) {
+            return true;
+        }
+        return false;
+    }
+
+    pub fn contains_variable_in_body(&self, variable: Variable) -> bool {
+        for lit in &self.body {
+            if lit.contains_variable(variable) {
+                return true;
             }
         }
         return false;
@@ -109,6 +101,32 @@ impl Literal {
             predicate: predicate,
             terms: terms,
         }
+    }
+
+    pub fn contains_variable(&self, variable: Variable) -> bool {
+        for term in &self.terms {
+            if let &Term::Variable(var) = term {
+                if var == variable {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    pub fn to_fact(self) -> Fact {
+        let mut terms = Vec::new();
+        for term in self.terms {
+            match term {
+                Term::Constant(cst) => {
+                    terms.push(cst);
+                },
+                Term::Variable(_) => {
+                    panic!("Literal::to_fact() called with Literal containing variables.");
+                }
+            }
+        }
+        Fact::new_from_vec(self.predicate, terms)
     }
 }
 

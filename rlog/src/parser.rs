@@ -24,7 +24,7 @@ fn err_msg<'a, T>(msg: &'static str, rest: &'a str) -> Result<'a, T> {
     })
 }
 
-pub fn some_char_is<F>(opt_char: Option<char>, f: F) -> bool where F: Fn(char) -> bool {
+fn some_char_is<F>(opt_char: Option<char>, f: F) -> bool where F: Fn(char) -> bool {
     if let Some(c) = opt_char {
         f(c)
     } else {
@@ -32,7 +32,7 @@ pub fn some_char_is<F>(opt_char: Option<char>, f: F) -> bool where F: Fn(char) -
     }
 }
 
-pub fn substr_index(src: &str, substr: &str) -> usize {
+fn substr_index(src: &str, substr: &str) -> usize {
     let diff = substr.as_ptr() as isize - src.as_ptr() as isize;
     if 0 <= diff && diff as usize <= src.len() {
         diff as usize
@@ -41,12 +41,12 @@ pub fn substr_index(src: &str, substr: &str) -> usize {
     }
 }
 
-pub fn slice_src<'a>(src: &'a str, rest: &'a str) -> &'a str {
+fn slice_src<'a>(src: &'a str, rest: &'a str) -> &'a str {
     let index = substr_index(src, rest);
     src.split_at(index).0
 }
 
-pub fn character_is<F>(src: &str, f: F) -> Result<char> where F: Fn(char) -> bool {
+fn character_is<F>(src: &str, f: F) -> Result<char> where F: Fn(char) -> bool {
     let mut cs = src.chars();
     let c = cs.next();
     if some_char_is(c, f) {
@@ -57,11 +57,11 @@ pub fn character_is<F>(src: &str, f: F) -> Result<char> where F: Fn(char) -> boo
     }
 }
 
-pub fn character(src: &str, c: char) -> Result<char> {
+fn character(src: &str, c: char) -> Result<char> {
     character_is(src, |x| c == x)
 }
 
-pub fn start_and_continue<F, G>(src: &str, f: F, g: G) -> Result<&str>
+fn start_and_continue<F, G>(src: &str, f: F, g: G) -> Result<&str>
     where F: Fn(char) -> bool,
           G: Fn(char) -> bool {
     let mut rest;
@@ -77,7 +77,7 @@ pub fn start_and_continue<F, G>(src: &str, f: F, g: G) -> Result<&str>
     return Ok((slice_src(src, rest), rest));
 }
 
-pub fn prefix<'a, 'b>(src: &'a str, prefix: &'b str) -> Result<'a, &'a str> {
+fn prefix<'a, 'b>(src: &'a str, prefix: &'b str) -> Result<'a, &'a str> {
     let mut rest = src;
     let mut cs = src.chars();
     let mut ps = prefix.chars();
@@ -93,7 +93,7 @@ pub fn prefix<'a, 'b>(src: &'a str, prefix: &'b str) -> Result<'a, &'a str> {
     return Ok((slice_src(src, rest), rest));
 }
 
-pub fn unsigned_decimal_integer(src: &str) -> Result<usize> {
+fn unsigned_decimal_integer(src: &str) -> Result<usize> {
     if let Ok((_, rest)) = character(src, '0') {
         if character_is(rest, |c| c.is_digit(10)).is_ok() {
             err_msg("Octal literal", src)
@@ -106,22 +106,22 @@ pub fn unsigned_decimal_integer(src: &str) -> Result<usize> {
     }
 }
 
-pub fn char_is_not_uppercase(c: char) -> bool {
+fn char_is_not_uppercase(c: char) -> bool {
     let mut lowered = c.to_lowercase();
     lowered.next() == Some(c) && lowered.next().is_none()
 }
 
-pub fn lowercase_identifier(src: &str) -> Result<&str> {
+fn lowercase_identifier(src: &str) -> Result<&str> {
     start_and_continue(src, |c| UnicodeXID::is_xid_start(c) && char_is_not_uppercase(c),
     UnicodeXID::is_xid_continue)
 }
 
-pub fn uppercase_identifier(src: &str) -> Result<&str> {
+fn uppercase_identifier(src: &str) -> Result<&str> {
     start_and_continue(src, |c| UnicodeXID::is_xid_start(c) && !char_is_not_uppercase(c),
     UnicodeXID::is_xid_continue)
 }
 
-pub fn skip_whitespace(src: &str) -> &str {
+fn skip_whitespace(src: &str) -> &str {
     let mut rest = src;
     let mut cs = src.chars();
     loop {
@@ -140,7 +140,7 @@ pub fn skip_whitespace(src: &str) -> &str {
     return rest;
 }
 
-pub fn terms<'a, 'b>(src: &'a str, var_names: &'b mut NameTable, predicate_names: &'b mut NameTable) -> Result<'a, Vec<Term>> {
+fn terms<'a, 'b>(src: &'a str, var_names: &'b mut NameTable, predicate_names: &'b mut NameTable) -> Result<'a, Vec<Term>> {
     let mut rest = src;
     let mut result = Vec::new();
     debug!("Looking for terms...");
@@ -167,7 +167,7 @@ pub fn terms<'a, 'b>(src: &'a str, var_names: &'b mut NameTable, predicate_names
     }
 }
 
-pub fn literal<'a, 'b>(src: &'a str, var_names: &'b mut NameTable, predicate_names: &'b mut NameTable) -> Result<'a, Literal> {
+fn literal<'a, 'b>(src: &'a str, var_names: &'b mut NameTable, predicate_names: &'b mut NameTable) -> Result<'a, Literal> {
     let mut rest = src;
     rest = skip_whitespace(rest);
     let (predicate_name, r) = try!(lowercase_identifier(rest));
@@ -186,7 +186,6 @@ pub fn literal<'a, 'b>(src: &'a str, var_names: &'b mut NameTable, predicate_nam
 pub fn db(source: &str) -> Result<DB> {
     let mut rest = source;
     let mut db = DB::new(Program::new());
-    let mut predicate_names = NameTable::new();
     loop {
         rest = skip_whitespace(rest);
         if rest.len() == 0 {
@@ -194,7 +193,7 @@ pub fn db(source: &str) -> Result<DB> {
         }
         let start_of_clause = rest;
         let mut var_names = NameTable::new();
-        let (head, r) = try!(literal(rest, &mut var_names, &mut predicate_names)
+        let (head, r) = try!(literal(rest, &mut var_names, &mut db.program.predicate_names)
                              .map(|(lit, r)| (Some(lit), r))
             .or_else(|_| character(rest, '?').map(|(_, r)| (None, r))));
         rest = r;
@@ -204,7 +203,7 @@ pub fn db(source: &str) -> Result<DB> {
             let mut literals = Vec::new();
             rest = skip_whitespace(rest);
             loop {
-                let (lit, r) = try!(literal(rest, &mut var_names, &mut predicate_names));
+                let (lit, r) = try!(literal(rest, &mut var_names, &mut db.program.predicate_names));
                 rest = r;
                 literals.push(lit);
                 rest = skip_whitespace(rest);
@@ -219,6 +218,7 @@ pub fn db(source: &str) -> Result<DB> {
                 body: literals,
             };
             if clause.is_valid() {
+                db.program.clause_variable_names.insert(db.program.clauses.len(), var_names);
                 db.program.clauses.push(clause);
             } else {
                 return err_msg("Invalid clause", start_of_clause);

@@ -2,7 +2,7 @@ use db::{DB};
 use matching::{Bindings};
 
 pub struct BottomUpEvaluator {
-    db: DB,
+    pub db: DB,
     next_clause: usize,
     fact_added_this_iter: bool,
 }
@@ -16,7 +16,7 @@ impl BottomUpEvaluator {
         }
     }
 
-    pub fn step(&mut self) {
+    fn step(&mut self) {
         let clause = &self.db.program.clauses[self.next_clause];
         self.next_clause += 1;
         assert!(clause.is_valid());
@@ -107,7 +107,7 @@ impl BottomUpEvaluator {
         self.next_clause = 0;
     }
 
-    fn run(&mut self) {
+    pub fn run(&mut self) {
         loop {
             self.fact_added_this_iter = false;
             self.run_iter();

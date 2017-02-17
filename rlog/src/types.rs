@@ -1,3 +1,7 @@
+use name_table::{NameTable};
+
+use std::fmt;
+
 pub type Predicate = usize;
 pub type Constant = usize;
 pub type Variable = usize;
@@ -137,5 +141,33 @@ impl Fact {
             predicate: predicate,
             terms: terms,
         }
+    }
+
+    pub fn to_display<'a, 'b>(&'a self, pred_names: &'b NameTable) -> FactDisplayer<'a, 'b> {
+        FactDisplayer {
+            fact: self,
+            name: pred_names.get_name(self.predicate).unwrap(),
+        }
+    }
+}
+
+pub struct FactDisplayer<'a, 'b> {
+    fact: &'a Fact,
+    name: &'b str,
+}
+
+impl<'a, 'b> fmt::Display for FactDisplayer<'a, 'b> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}(", self.name);
+        let num_terms = self.fact.terms.len();
+        for (i, term) in self.fact.terms.iter().enumerate() {
+            if i + 1 == num_terms {
+                write!(f, "{}", term);
+            } else {
+                write!(f, "{}, ", term);
+            }
+        }
+        write!(f, ").");
+        return Ok(());
     }
 }

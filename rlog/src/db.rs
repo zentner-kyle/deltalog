@@ -25,4 +25,15 @@ impl DB {
         }
         self.facts[fact.predicate].insert(fact, true);
     }
+
+    pub fn facts_as_string(&self) -> String {
+        use std::fmt::Write;
+        let mut output = String::new();
+        for fact_table in &self.facts {
+            for (ref fact, _) in fact_table {
+                writeln!(&mut output, "{}", fact.to_display(&self.program.predicate_names));
+            }
+        }
+        return output;
+    }
 }

@@ -19,7 +19,8 @@ pub enum Error<'a> {
     Internal {
     },
     SourceMsg {
-        source: &'a str
+        msg: &'static str,
+        source: &'a str,
     },
 }
 
@@ -31,8 +32,15 @@ impl Context {
             .map(|(db, _)| Context {
                 evaluator: bottom_up::BottomUpEvaluator::new(db),
             })
-            .map_err(|_| {
-                Error::Internal{}
+            .map_err(|e| {
+                match e {
+                    parser::Error::Msg{msg, rest} => {
+                        Error::SourceMsg{
+                            msg: msg,
+                            source: rest,
+                        }
+                    }
+                }
             })
     }
 

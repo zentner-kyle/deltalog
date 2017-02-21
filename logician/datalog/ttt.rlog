@@ -1,0 +1,58 @@
+# Inlined virtual tables.
+enumerate(0, 0, 0).
+enumerate(0, 1, 1).
+enumerate(0, 2, 2).
+enumerate(1, 0, 3).
+enumerate(1, 1, 4).
+enumerate(1, 2, 5).
+enumerate(2, 0, 6).
+enumerate(2, 1, 7).
+enumerate(2, 2, 8).
+
+not_eq(0, 1).
+not_eq(0, 2).
+not_eq(1, 0).
+not_eq(2, 0).
+not_eq(1, 2).
+not_eq(2, 1).
+
+eq(0, 0).
+eq(1, 1).
+eq(2, 2).
+
+# GameLog utils.
+piece(0).
+piece(1).
+
+not_eq_xy(X, Y, X1, Y1) :- not_eq(X, X1), not_eq(Y, Y1)
+not_eq_xy(X, Y, X1, Y1) :- not_eq(X, X1), eq(Y, Y1)
+not_eq_xy(X, Y, X1, Y1) :- not_eq(Y, Y1), eq(X, X1)
+
+# Input
+
+turn(0).
+board(0, 0, 2).
+board(0, 1, 2).
+board(0, 2, 2).
+board(1, 0, 2).
+board(1, 1, 2).
+board(1, 2, 2).
+board(2, 0, 2).
+board(2, 1, 2).
+board(2, 1, 2).
+board(2, 2, 2).
+
+# TTT Logic
+next_board(E, X, Y, P) :-
+  board(X, Y, P),
+  piece(P),
+  enumerate(X1, Y1, E), 
+  not_eq_xy(X, Y, X1, Y1)
+next_board(E, X, Y, P) :-
+  board(X, Y, 2),
+  enumerate(X, Y, E),
+  turn(P)
+next_board(E, X, Y, 2) :-
+  board(X, Y, 2),
+  enumerate(X1, Y1, E), 
+  not_eq_xy(X, Y, X1, Y1)

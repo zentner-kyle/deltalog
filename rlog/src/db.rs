@@ -1,7 +1,7 @@
 use std::iter;
 use std::collections::hash_map::{HashMap};
 
-use types::{Fact};
+use types::{Fact, Predicate};
 use program::{Program};
 
 #[derive(Debug)]
@@ -18,11 +18,16 @@ impl DB {
         }
     }
 
-    pub fn add_fact(&mut self, fact: Fact) {
-        if fact.predicate >= self.facts.len() {
-            let difference = 1 + fact.predicate - self.facts.len();
+    pub fn extend_facts_to_predicate(&mut self, predicate: Predicate) {
+        if predicate >= self.facts.len() {
+            let difference = 1 + predicate - self.facts.len();
             self.facts.extend(iter::repeat(HashMap::new()).take(difference));
         }
+    }
+ 
+
+    pub fn add_fact(&mut self, fact: Fact) {
+        self.extend_facts_to_predicate(fact.predicate);
         self.facts[fact.predicate].insert(fact, true);
     }
 

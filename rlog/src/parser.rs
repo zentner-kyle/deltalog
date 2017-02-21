@@ -189,6 +189,8 @@ pub fn db(source: &str) -> Result<DB> {
     loop {
         rest = skip_whitespace(rest);
         if rest.len() == 0 {
+            let last_predicate = db.program.num_predicates();
+            db.extend_facts_to_predicate(last_predicate);
             return Ok((db, rest));
         }
         let start_of_clause = rest;

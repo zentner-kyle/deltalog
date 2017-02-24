@@ -1,6 +1,6 @@
 use db::{DB};
 use matching::{Bindings};
-use fact_table::{FactTable};
+use fact_table::{FactTable, FactTableIter};
 
 pub struct BottomUpEvaluator {
     pub db: DB,
@@ -25,11 +25,9 @@ impl BottomUpEvaluator {
             assert!(clause.is_valid());
             let literals_to_match = clause.body.len();
 
-            let mut bindings_per_lit = Vec::with_capacity(literals_to_match);
-            bindings_per_lit.push(Bindings::new(clause.num_variables()));
-
             let mut lit_idx = 0;
             let mut fact_iters = Vec::new();
+            fact_iters.push(self.db.get_iter_for_literal(&clause.body[0], Bindings::new(clause.num_variables())));
             let mut done = false;
             // The comments for this algorithm describe a motion over a 2D "table".
             // For each literal in the body of the current clause, the "table" has a row.
@@ -39,34 +37,22 @@ impl BottomUpEvaluator {
             // the facts for a predicate.
             while !done {
                 let lit = &clause.body[lit_idx];
-                // If we moved down to a new row, start at the beginning of a row.
-                if lit_idx >= fact_iters.len() {
-                    fact_iters.push(self.db.get_iter_for_literal(lit));
-                } else {
-                    // We shouldn't have any record of where we are below the current row.
-                    assert!(fact_iters.len() == lit_idx + 1);
-                }
                 debug!("Try to move right");
-                if let Some((fact, _)) = fact_iters[lit_idx].next() {
+                if let Some((binds, fact, _)) = fact_iters[lit_idx].next() {
                     debug!("There was something for us to move right into.");
-                    if let Some(binds) = bindings_per_lit[lit_idx].refine(lit, fact) {
-                        debug!("And the new cell is valid.");
-                        // Try to move down to before the beginning of the next row.
-                        if lit_idx + 1 < literals_to_match {
-                            debug!("We can move down.");
-                            lit_idx += 1;
-                            // Remember our constraints from this cell for the next row.
-                            bindings_per_lit.push(binds);
-                        } else {
-                            debug!("We're in the last row!");
-                            // Output a new fact, assuming the head has any literals.
-                            if let Some(ref head) = clause.head {
-                                debug!("Output a fact to the temporary array.");
-                                facts_to_add.add_fact(binds.solidify(head), ());
-                            }
-                        }
+                    // Try to move down to before the beginning of the next row.
+                    if lit_idx + 1 < literals_to_match {
+                        debug!("We can move down.");
+                        lit_idx += 1;
+                        // Remember our constraints from this cell for the next row.
+                        fact_iters.push(self.db.get_iter_for_literal(lit, binds));
                     } else {
-                        debug!("But the cell is not valid. Try again.");
+                        debug!("We're in the last row!");
+                        // Output a new fact, assuming the head has any literals.
+                        if let Some(ref head) = clause.head {
+                            debug!("Output a fact to the temporary array.");
+                            facts_to_add.add_fact(binds.solidify(head), ());
+                        }
                     }
                 } else {
                     debug!("But there was no new cell to move right into.");
@@ -79,8 +65,6 @@ impl BottomUpEvaluator {
                         // Forget where we were on this row, since we want to restart before the
                         // beginning of the row next time.
                         fact_iters.pop();
-                        // Also, forget our constraints from above.
-                        bindings_per_lit.pop();
                         lit_idx -= 1;
                     }
                 }

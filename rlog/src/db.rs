@@ -3,8 +3,9 @@ use std::collections::hash_map;
 use std::collections::hash_map::{HashMap};
 
 use types::{Fact, Predicate, Literal};
+use matching::{Bindings};
 use program::{Program};
-use fact_table::{FactTable};
+use fact_table::{FactTable, FactTableIter};
 
 #[derive(Debug)]
 pub struct DB {
@@ -44,9 +45,10 @@ impl DB {
         return output;
     }
 
-    pub fn get_iter_for_literal<'a>(&'a self, literal: &Literal) -> hash_map::Iter<'a, Fact, ()> {
-        self.facts[literal.predicate].internal_iter()
+    pub fn get_iter_for_literal<'a, 'b, 'c>(&'a self, literal: &'b Literal, bindings: Bindings) -> FactTableIter<'c, ()> where 'a : 'c, 'b : 'c {
+        self.facts[literal.predicate].iter(literal, bindings)
     }
+
 
     #[cfg(test)]
     pub fn get_fact_table(&self) -> FactTable<()> {

@@ -11,17 +11,17 @@ impl TruthValue for () {
     fn join(&self, _: Self) {}
 }
 
-struct FactTableIter<'a, T: 'a> {
+pub struct FactTableIter<'a, T: 'a> {
     map_iter: hash_map::Iter<'a, Fact, T>,
     literal: &'a Literal,
-    bindings: &'a Bindings,
+    bindings: Bindings,
 }
 
 impl<'a, T> Iterator for FactTableIter<'a, T> {
     type Item=(Bindings, &'a Fact, &'a T);
     fn next(&mut self) -> Option<Self::Item> {
         while let Some((fact, truth)) = self.map_iter.next() {
-            if let Some(bindings) = self.bindings.refine(&self.literal, fact) {
+            if let Some(bindings) = self.bindings.refine(self.literal, fact) {
                 return Some((bindings, fact, truth));
             }
         }
@@ -49,8 +49,8 @@ impl<T> FactTable<T> where T: TruthValue {
         return new_fact;
     }
 
-    pub fn iter<'a>(&'a self, literal: &'a Literal, bindings: &'a Bindings) -> FactTableIter<'a, T> {
-        FactTableIter {
+    pub fn iter<'a, 'b, 'c>(&'a self, literal: &'b Literal, bindings: Bindings) -> FactTableIter<'c, T> where 'a : 'c, 'b : 'c {
+        FactTableIter::<'c, T> {
             map_iter: self.map.iter(),
             literal: literal,
             bindings: bindings, 

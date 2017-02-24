@@ -9,6 +9,7 @@ mod name_table;
 mod parser;
 mod program;
 mod types;
+mod fact_table;
 
 pub struct Context {
     evaluator: bottom_up::BottomUpEvaluator,

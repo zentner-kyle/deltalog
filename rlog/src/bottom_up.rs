@@ -1,5 +1,6 @@
 use db::{DB};
 use matching::{Bindings};
+use fact_table::{FactTable};
 
 pub struct BottomUpEvaluator {
     pub db: DB,
@@ -17,17 +18,16 @@ impl BottomUpEvaluator {
     }
 
     fn step(&mut self) {
-        let clause = &self.db.program.clauses[self.next_clause];
-        self.next_clause += 1;
-        assert!(clause.is_valid());
-        let literals_to_match = clause.body.len();
-
-        let mut bindings_per_lit = Vec::with_capacity(literals_to_match);
-        bindings_per_lit.push(Bindings::new(clause.num_variables()));
-
-        let mut facts_to_add = Vec::new();
-
+        let mut facts_to_add = FactTable::<()>::new();
         {
+            let clause = &self.db.program.clauses[self.next_clause];
+            self.next_clause += 1;
+            assert!(clause.is_valid());
+            let literals_to_match = clause.body.len();
+
+            let mut bindings_per_lit = Vec::with_capacity(literals_to_match);
+            bindings_per_lit.push(Bindings::new(clause.num_variables()));
+
             let mut lit_idx = 0;
             let mut fact_iters = Vec::new();
             let mut done = false;
@@ -41,7 +41,7 @@ impl BottomUpEvaluator {
                 let lit = &clause.body[lit_idx];
                 // If we moved down to a new row, start at the beginning of a row.
                 if lit_idx >= fact_iters.len() {
-                    fact_iters.push(self.db.facts[lit.predicate].iter());
+                    fact_iters.push(self.db.get_iter_for_literal(lit));
                 } else {
                     // We shouldn't have any record of where we are below the current row.
                     assert!(fact_iters.len() == lit_idx + 1);
@@ -62,7 +62,7 @@ impl BottomUpEvaluator {
                             // Output a new fact, assuming the head has any literals.
                             if let Some(ref head) = clause.head {
                                 debug!("Output a fact to the temporary array.");
-                                facts_to_add.push(binds.solidify(head));
+                                facts_to_add.add_fact(binds.solidify(head), ());
                             }
                         }
                     } else {
@@ -87,15 +87,8 @@ impl BottomUpEvaluator {
             }
         }
 
-        for fact in facts_to_add {
-            let mut fact_added = false;
-            debug!("Try to add {:?} to the DB", fact);
-            self.db.facts[fact.predicate].entry(fact).or_insert_with(|| {
-                debug!("It's new!");
-                fact_added = true;
-                true
-            });
-            self.fact_added_this_iter |= fact_added;
+        for fact in facts_to_add.all_facts().cloned() {
+            self.fact_added_this_iter |= self.db.add_fact(fact);
         }
 
     }
@@ -127,6 +120,7 @@ mod tests {
     use db::{DB};
     use program::{Program};
     use types::{Clause, Term, Literal, Fact};
+    use fact_table::{FactTable};
 
     #[test]
     fn run_no_clauses() {
@@ -159,8 +153,14 @@ mod tests {
         let mut ev = BottomUpEvaluator::new(db);
         ev.run();
         // We expect B(2) to be added to the DB.
-        assert_eq!(ev.db.facts[1].len(), 1);
-        assert_eq!(ev.db.facts[1].iter().next().unwrap().0, &Fact::new_from_vec(1, vec![2]));
+        let mut expected = FactTable::new();
+        expected.add_fact(Fact::new_from_vec(0, vec![
+            2
+        ]), ());
+        expected.add_fact(Fact::new_from_vec(1, vec![
+            2
+        ]), ());
+        assert_eq!(expected, ev.db.get_fact_table());
     }
 
     #[test]
@@ -197,7 +197,16 @@ mod tests {
         let mut ev = BottomUpEvaluator::new(db);
         ev.run();
         // We expect A(2) to be added to the DB.
-        assert_eq!(ev.db.facts[0].len(), 1);
-        assert_eq!(ev.db.facts[0].iter().next().unwrap().0, &Fact::new_from_vec(0, vec![2]));
+        let mut expected = FactTable::new();
+        expected.add_fact(Fact::new_from_vec(0, vec![
+            2
+        ]), ());
+        expected.add_fact(Fact::new_from_vec(1, vec![
+            2
+        ]), ());
+        expected.add_fact(Fact::new_from_vec(2, vec![
+            2
+        ]), ());
+        assert_eq!(expected, ev.db.get_fact_table());
     }
 }

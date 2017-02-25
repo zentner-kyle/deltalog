@@ -1,7 +1,10 @@
-use types::{Fact, Literal};
-use matching::{Bindings};
 use std::collections::hash_map;
 use std::collections::hash_map::{HashMap, Entry};
+use std::iter;
+
+use matching::{Bindings};
+use name_table::{NameTable};
+use types::{Fact, Predicate, Literal};
 
 pub trait TruthValue : Clone + PartialEq {
     fn join(&self, new: Self);
@@ -31,44 +34,61 @@ impl<'a, T> Iterator for FactTableIter<'a, T> {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct FactTable<T> where T: TruthValue {
-    map: HashMap<Fact, T>,
+    maps: Vec<HashMap<Fact, T>>,
 }
 
 impl<T> FactTable<T> where T: TruthValue {
     pub fn new() -> Self {
         FactTable {
-            map: HashMap::new(),
+            maps: Vec::new(),
+        }
+    }
+
+    pub fn extend_num_predicates(&mut self, predicate: Predicate) {
+        if predicate >= self.maps.len() {
+            let difference = 1 + predicate - self.maps.len();
+            self.maps.extend(iter::repeat(HashMap::new()).take(difference));
         }
     }
 
     pub fn merge_new_generation(&mut self, other: Self) -> bool {
-        let mut new_fact = false;
-        for (fact, truth) in other.map {
-            new_fact |= self.add_fact(fact, truth);
+        let mut was_new_fact_added = false;
+        for table in other.maps {
+            for (fact, truth) in table {
+                was_new_fact_added |= self.add_fact(fact, truth);
+            }
         }
-        return new_fact;
+        return was_new_fact_added;
     }
 
     pub fn iter<'a, 'b, 'c>(&'a self, literal: &'b Literal, bindings: Bindings) -> FactTableIter<'c, T> where 'a : 'c, 'b : 'c {
         FactTableIter::<'c, T> {
-            map_iter: self.map.iter(),
+            map_iter: self.maps[literal.predicate].iter(),
             literal: literal,
             bindings: bindings, 
         }
     }
 
-    pub fn internal_iter<'a>(&'a self) -> hash_map::Iter<'a, Fact, T> {
-        self.map.iter()
+    pub fn as_datalog(&self, predicate_names: &NameTable) -> String {
+        use std::fmt::Write;
+        let mut output = String::new();
+        for table in &self.maps {
+            for fact in table.keys() {
+                writeln!(&mut output, "{}", fact.to_display(predicate_names));
+            }
+        }
+        return output;
     }
 
-    pub fn all_facts<'a>(&'a self) -> hash_map::Keys<'a, Fact, T> {
-        self.map.keys()
+    pub fn all_facts(&self) -> Vec<Fact> {
+        self.maps.iter().flat_map(|t| t.iter()).map(|(f, _)| f).cloned().collect()
     }
-
 
     // Returns true if the fact was not previously in the table.
     pub fn add_fact(&mut self, fact: Fact, truth: T) -> bool {
-        match self.map.entry(fact) {
+        self.extend_num_predicates(fact.predicate);
+        let mut map = &mut self.maps[fact.predicate];
+        match map.entry(fact) {
             Entry::Occupied(mut pair) => {
                 pair.get_mut().join(truth);
                 false

@@ -71,7 +71,7 @@ impl BottomUpEvaluator {
             }
         }
 
-        for fact in facts_to_add.all_facts().cloned() {
+        for fact in facts_to_add.all_facts() {
             self.fact_added_this_iter |= self.db.add_fact(fact);
         }
 

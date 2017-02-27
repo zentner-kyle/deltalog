@@ -29,6 +29,10 @@ impl DB {
         self.facts.add_fact(fact, ())
     }
 
+    pub fn add_new_facts(&mut self, fact_table: FactTable<()>) -> bool {
+        self.facts.merge_new_generation(fact_table)
+    }
+
     pub fn facts_as_string(&self) -> String {
         return self.facts.as_datalog(&self.program.predicate_names);
     }

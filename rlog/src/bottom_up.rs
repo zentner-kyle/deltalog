@@ -1,11 +1,37 @@
 use db::{DB};
 use matching::{Bindings};
 use fact_table::{FactTable, FactTableIter};
+use types::{Clause};
 
 pub struct BottomUpEvaluator {
     pub db: DB,
     next_clause: usize,
     fact_added_this_iter: bool,
+}
+
+fn match_clause(db: &DB, clause: &Clause) -> FactTable<()> {
+    let mut facts_to_add = FactTable::<()>::new();
+    let literals_to_match = clause.body.len();
+
+    let mut fact_iters = Vec::with_capacity(literals_to_match);
+    fact_iters.push(db.get_iter_for_literal(&clause.body[0], Bindings::new(clause.num_variables())));
+    loop {
+        let lit_idx = fact_iters.len() - 1;
+        if let Some((binds, fact, _)) = fact_iters[lit_idx].next() {
+            if lit_idx + 1 <= literals_to_match {
+                fact_iters.push(db.get_iter_for_literal(&clause.body[lit_idx], binds));
+            } else if let Some(ref head) = clause.head {
+                facts_to_add.add_fact(binds.solidify(head), ());
+            }
+        } else {
+            if lit_idx == 0 {
+                break;
+            } else {
+                fact_iters.pop();
+            }
+        }
+    }
+    return facts_to_add;
 }
 
 impl BottomUpEvaluator {
@@ -17,69 +43,15 @@ impl BottomUpEvaluator {
         }
     }
 
-    fn step(&mut self) {
-        let mut facts_to_add = FactTable::<()>::new();
-        {
-            let clause = &self.db.program.clauses[self.next_clause];
-            self.next_clause += 1;
-            assert!(clause.is_valid());
-            let literals_to_match = clause.body.len();
-
-            let mut lit_idx = 0;
-            let mut fact_iters = Vec::new();
-            fact_iters.push(self.db.get_iter_for_literal(&clause.body[0], Bindings::new(clause.num_variables())));
-            let mut done = false;
-            // The comments for this algorithm describe a motion over a 2D "table".
-            // For each literal in the body of the current clause, the "table" has a row.
-            // Moving right corresponds to using a different fact for the same literal.
-            // Moving down corresponds to matching a different literal.
-            // Note that reach row is a different length, and is actually an iterator from the DB of
-            // the facts for a predicate.
-            while !done {
-                let lit = &clause.body[lit_idx];
-                debug!("Try to move right");
-                if let Some((binds, fact, _)) = fact_iters[lit_idx].next() {
-                    debug!("There was something for us to move right into.");
-                    // Try to move down to before the beginning of the next row.
-                    if lit_idx + 1 < literals_to_match {
-                        debug!("We can move down.");
-                        lit_idx += 1;
-                        // Remember our constraints from this cell for the next row.
-                        fact_iters.push(self.db.get_iter_for_literal(lit, binds));
-                    } else {
-                        debug!("We're in the last row!");
-                        // Output a new fact, assuming the head has any literals.
-                        if let Some(ref head) = clause.head {
-                            debug!("Output a fact to the temporary array.");
-                            facts_to_add.add_fact(binds.solidify(head), ());
-                        }
-                    }
-                } else {
-                    debug!("But there was no new cell to move right into.");
-                    debug!("We should move up.");
-                    if lit_idx == 0 {
-                        debug!("But we're already at the top!");
-                        done = true;
-                    } else {
-                        debug!("We can move up.");
-                        // Forget where we were on this row, since we want to restart before the
-                        // beginning of the row next time.
-                        fact_iters.pop();
-                        lit_idx -= 1;
-                    }
-                }
-            }
-        }
-
-        for fact in facts_to_add.all_facts() {
-            self.fact_added_this_iter |= self.db.add_fact(fact);
-        }
-
+    fn step(&mut self) -> bool {
+        let facts_to_add = match_clause(&self.db, &self.db.program.clauses[self.next_clause]);
+        self.next_clause += 1;
+        return self.db.add_new_facts(facts_to_add);
     }
 
     fn run_iter(&mut self) {
         while self.next_clause < self.db.program.clauses.len() {
-            self.step();
+            self.fact_added_this_iter |= self.step();
         }
         self.next_clause = 0;
     }

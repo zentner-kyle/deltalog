@@ -1,7 +1,6 @@
 extern crate rlog;
 extern crate clap;
 
-use std::io;
 use std::fs;
 use clap::{Arg, App};
 

@@ -5,7 +5,7 @@ use name_table::{NameTable};
 use fact_table::{FactTable};
 use std::str::{FromStr};
 
-use types::{Term, Literal, Clause, Fact};
+use types::{Term, Literal, Clause};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Error<'a> {
@@ -140,7 +140,7 @@ fn skip_whitespace(src: &str) -> &str {
     return rest;
 }
 
-fn terms<'a, 'b>(src: &'a str, var_names: &'b mut NameTable, predicate_names: &'b mut NameTable) -> Result<'a, Vec<Term>> {
+fn terms<'a, 'b>(src: &'a str, var_names: &'b mut NameTable) -> Result<'a, Vec<Term>> {
     let mut rest = src;
     let mut result = Vec::new();
     debug!("Looking for terms...");
@@ -175,7 +175,7 @@ fn literal<'a, 'b>(src: &'a str, var_names: &'b mut NameTable, predicate_names: 
     rest = skip_whitespace(rest);
     rest = try!(character(rest, '(')).1;
     rest = skip_whitespace(rest);
-    let (ts, r) = try!(terms(rest, var_names, predicate_names));
+    let (ts, r) = try!(terms(rest, var_names));
     rest = r;
     rest = skip_whitespace(rest);
     rest = try!(character(rest, ')')).1;
@@ -190,7 +190,6 @@ pub fn program(source: &str) -> Result<(FactTable<()>, Program)> {
     loop {
         rest = skip_whitespace(rest);
         if rest.len() == 0 {
-            let last_predicate = program.num_predicates();
             facts.extend_num_predicates(program.num_predicates());
             return Ok(((facts, program), rest));
         }
@@ -240,7 +239,7 @@ pub fn program(source: &str) -> Result<(FactTable<()>, Program)> {
 mod tests {
     use super::{unsigned_decimal_integer, character_is, lowercase_identifier, uppercase_identifier,
     terms, prefix, literal, program};
-    use types::{Constant, Term, Literal, Fact};
+    use types::{Term, Literal};
     use name_table::{NameTable};
 
     #[test]
@@ -289,20 +288,19 @@ mod tests {
     #[test]
     fn parse_terms() {
         let mut var_names = NameTable::new();
-        let mut pred_names = NameTable::new();
-        assert!(terms("0", &mut var_names, &mut pred_names).is_ok());
-        assert!(terms("0, 1", &mut var_names, &mut pred_names).is_ok());
-        assert!(terms("0 ,1", &mut var_names, &mut pred_names).is_ok());
-        assert!(terms("0 , 1", &mut var_names, &mut pred_names).is_ok());
-        assert!(terms("X", &mut var_names, &mut pred_names).is_ok());
-        assert_eq!(terms("X", &mut var_names, &mut pred_names).unwrap().1, "");
-        assert!(terms("Y", &mut var_names, &mut pred_names).is_ok());
+        assert!(terms("0", &mut var_names).is_ok());
+        assert!(terms("0, 1", &mut var_names).is_ok());
+        assert!(terms("0 ,1", &mut var_names).is_ok());
+        assert!(terms("0 , 1", &mut var_names).is_ok());
+        assert!(terms("X", &mut var_names).is_ok());
+        assert_eq!(terms("X", &mut var_names).unwrap().1, "");
+        assert!(terms("Y", &mut var_names).is_ok());
         assert_eq!(var_names.get("Y"), 1);
-        assert!(terms("100", &mut var_names, &mut pred_names).is_ok());
-        assert!(terms("0 , X, 100", &mut var_names, &mut pred_names).is_ok());
-        assert!(terms("x", &mut var_names, &mut pred_names).is_err());
-        assert!(terms(",", &mut var_names, &mut pred_names).is_err());
-        assert!(terms("", &mut var_names, &mut pred_names).is_err());
+        assert!(terms("100", &mut var_names).is_ok());
+        assert!(terms("0 , X, 100", &mut var_names).is_ok());
+        assert!(terms("x", &mut var_names).is_err());
+        assert!(terms(",", &mut var_names).is_err());
+        assert!(terms("", &mut var_names).is_err());
     }
 
     #[test]

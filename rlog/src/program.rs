@@ -1,6 +1,6 @@
 use std::collections::hash_map::{HashMap};
 
-use types::{Clause, ClauseIndex, Predicate};
+use types::{Clause, ClauseIndex};
 
 use name_table::{NameTable};
 

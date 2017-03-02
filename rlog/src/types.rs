@@ -32,6 +32,7 @@ pub struct Fact {
 }
 
 impl Clause {
+    #[allow(dead_code)]
     pub fn new_from_vec(head: Literal, body: Vec<Literal>) -> Self {
         Clause {
             head: Some(head),
@@ -62,6 +63,7 @@ impl Clause {
         return count;
     }
 
+    #[allow(dead_code)]
     pub fn contains_variable(&self, variable: Variable) -> bool {
         if let Some(ref head) = self.head {
             if head.contains_variable(variable) {

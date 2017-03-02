@@ -83,7 +83,7 @@ impl Bindings {
 #[cfg(test)]
 mod tests {
     use super::{Bindings};
-    use types::{Constant, Term, Literal, Fact};
+    use types::{Term, Literal, Fact};
 
     #[test]
     fn match_no_variables() {

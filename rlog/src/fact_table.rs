@@ -76,12 +76,13 @@ impl<T> FactTable<T> where T: TruthValue {
         let mut output = String::new();
         for table in &self.maps {
             for fact in table.keys() {
-                writeln!(&mut output, "{}", fact.to_display(predicate_names));
+                writeln!(&mut output, "{}", fact.to_display(predicate_names)).unwrap();
             }
         }
         return output;
     }
 
+    #[allow(dead_code)]
     pub fn all_facts(&self) -> Vec<Fact> {
         self.maps.iter().flat_map(|t| t.iter()).map(|(f, _)| f).cloned().collect()
     }

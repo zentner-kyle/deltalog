@@ -1,5 +1,5 @@
 use matching::{Bindings};
-use fact_table::{FactTable, FactTableIter, TruthValue};
+use fact_table::{FactTable, TruthValue};
 use types::{Clause};
 use program::{Program};
 
@@ -11,7 +11,7 @@ fn match_clause<T>(facts: &FactTable<T>, clause: &Clause) -> FactTable<T> where 
     fact_iters.push(facts.iter(&clause.body[0], Bindings::new(clause.num_variables())));
     loop {
         let lit_idx = fact_iters.len() - 1;
-        if let Some((binds, fact, _)) = fact_iters[lit_idx].next() {
+        if let Some((binds, _fact, _truth)) = fact_iters[lit_idx].next() {
             if lit_idx + 1 <= literals_to_match {
                 fact_iters.push(facts.iter(&clause.body[lit_idx], binds));
             } else if let Some(ref head) = clause.head {

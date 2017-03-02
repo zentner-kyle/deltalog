@@ -1,4 +1,4 @@
-use std::collections::hash_map::{HashMap, Entry};
+use std::collections::hash_map::{HashMap};
 
 #[derive(Debug)]
 pub struct NameTable {

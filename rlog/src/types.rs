@@ -158,16 +158,16 @@ pub struct FactDisplayer<'a, 'b> {
 
 impl<'a, 'b> fmt::Display for FactDisplayer<'a, 'b> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{}(", self.name);
+        write!(f, "{}(", self.name)?;
         let num_terms = self.fact.terms.len();
         for (i, term) in self.fact.terms.iter().enumerate() {
             if i + 1 == num_terms {
-                write!(f, "{}", term);
+                write!(f, "{}", term)?;
             } else {
-                write!(f, "{}, ", term);
+                write!(f, "{}, ", term)?;
             }
         }
-        write!(f, ").");
+        write!(f, ").")?;
         return Ok(());
     }
 }

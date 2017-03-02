@@ -3,6 +3,7 @@ use unicode_xid::UnicodeXID;
 use db::{DB};
 use program::{Program};
 use name_table::{NameTable};
+use fact_table::{FactTable};
 use std::str::{FromStr};
 
 use types::{Term, Literal, Clause, Fact};
@@ -184,18 +185,24 @@ fn literal<'a, 'b>(src: &'a str, var_names: &'b mut NameTable, predicate_names: 
 }
 
 pub fn db(source: &str) -> Result<DB> {
+    let ((facts, program), rest) = try!(db_contents(source));
+    return Ok((DB::new(facts, program), rest));
+}
+
+pub fn db_contents(source: &str) -> Result<(FactTable<()>, Program)> {
     let mut rest = source;
-    let mut db = DB::new(Program::new());
+    let mut facts = FactTable::new();
+    let mut program = Program::new();
     loop {
         rest = skip_whitespace(rest);
         if rest.len() == 0 {
-            let last_predicate = db.program.num_predicates();
-            db.extend_facts_to_predicate(last_predicate);
-            return Ok((db, rest));
+            let last_predicate = program.num_predicates();
+            facts.extend_num_predicates(program.num_predicates());
+            return Ok(((facts, program), rest));
         }
         let start_of_clause = rest;
         let mut var_names = NameTable::new();
-        let (head, r) = try!(literal(rest, &mut var_names, &mut db.program.predicate_names)
+        let (head, r) = try!(literal(rest, &mut var_names, &mut program.predicate_names)
                              .map(|(lit, r)| (Some(lit), r))
             .or_else(|_| character(rest, '?').map(|(_, r)| (None, r))));
         rest = r;
@@ -205,7 +212,7 @@ pub fn db(source: &str) -> Result<DB> {
             let mut literals = Vec::new();
             rest = skip_whitespace(rest);
             loop {
-                let (lit, r) = try!(literal(rest, &mut var_names, &mut db.program.predicate_names));
+                let (lit, r) = try!(literal(rest, &mut var_names, &mut program.predicate_names));
                 rest = r;
                 literals.push(lit);
                 rest = skip_whitespace(rest);
@@ -220,8 +227,8 @@ pub fn db(source: &str) -> Result<DB> {
                 body: literals,
             };
             if clause.is_valid() {
-                db.program.clause_variable_names.insert(db.program.clauses.len(), var_names);
-                db.program.clauses.push(clause);
+                program.clause_variable_names.insert(program.clauses.len(), var_names);
+                program.clauses.push(clause);
             } else {
                 return err_msg("Invalid clause", start_of_clause);
             }
@@ -230,7 +237,7 @@ pub fn db(source: &str) -> Result<DB> {
             if var_names.to_reverse().len() != 0 {
                 return err_msg("Fact contained variables", start_of_clause);
             }
-            db.add_fact(lit.to_fact());
+            facts.add_fact(lit.to_fact(), ());
         }
     }
 }
@@ -238,7 +245,7 @@ pub fn db(source: &str) -> Result<DB> {
 #[cfg(test)]
 mod tests {
     use super::{unsigned_decimal_integer, character_is, lowercase_identifier, uppercase_identifier,
-    terms, prefix, literal, db};
+    terms, prefix, literal, db_contents};
     use types::{Constant, Term, Literal, Fact};
     use name_table::{NameTable};
 
@@ -324,11 +331,11 @@ mod tests {
 
     #[test]
     fn test_db() {
-        assert!(db("a(0).").is_ok());
-        assert!(db("a(X) :- b(X)").is_ok());
-        assert!(db("a(X) :- b(X), c(Y)").is_ok());
-        assert!(db("a(X) :- b(X, Y), c(Y), test(Y)").is_ok());
-        assert!(db("#A comment").is_ok());
-        assert!(db("#A comment\nA(0).").is_err());
+        assert!(db_contents("a(0).").is_ok());
+        assert!(db_contents("a(X) :- b(X)").is_ok());
+        assert!(db_contents("a(X) :- b(X), c(Y)").is_ok());
+        assert!(db_contents("a(X) :- b(X, Y), c(Y), test(Y)").is_ok());
+        assert!(db_contents("#A comment").is_ok());
+        assert!(db_contents("#A comment\nA(0).").is_err());
     }
 }

@@ -14,9 +14,9 @@ pub struct DB {
 }
 
 impl DB {
-    pub fn new(program: Program) -> Self {
+    pub fn new(facts: FactTable<()>, program: Program) -> Self {
         DB {
-            facts: FactTable::new(),
+            facts: facts,
             program: program,
         }
     }

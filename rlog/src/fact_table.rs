@@ -7,10 +7,12 @@ use name_table::{NameTable};
 use types::{Fact, Predicate, Literal};
 
 pub trait TruthValue : Clone + PartialEq {
+    fn default() -> Self;
     fn join(&self, new: Self);
 }
 
 impl TruthValue for () {
+    fn default() -> Self {}
     fn join(&self, _: Self) {}
 }
 

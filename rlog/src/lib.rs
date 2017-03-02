@@ -12,7 +12,8 @@ mod types;
 mod fact_table;
 
 pub struct Context {
-    evaluator: bottom_up::BottomUpEvaluator,
+    facts: fact_table::FactTable<()>,
+    program: program::Program,
 }
 
 #[derive(Debug)]
@@ -29,9 +30,10 @@ pub type Result<'a, T> = std::result::Result<T, Error<'a>>;
 
 impl Context {
     pub fn new_from_source(source: &str) -> Result<Self> {
-        parser::db(source)
-            .map(|(db, _)| Context {
-                evaluator: bottom_up::BottomUpEvaluator::new(db),
+        parser::db_contents(source)
+            .map(|((facts, program), _)| Context {
+                facts: facts,
+                program: program,
             })
             .map_err(|e| {
                 match e {
@@ -46,7 +48,7 @@ impl Context {
     }
 
     pub fn facts_as_string(&mut self) -> String {
-        self.evaluator.run();
-        return self.evaluator.db.facts_as_string();
+        bottom_up::evaluate_bottom_up(&mut self.facts, &self.program);
+        return self.facts.as_datalog(&self.program.predicate_names);
     }
 }

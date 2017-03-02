@@ -101,7 +101,7 @@ fn unsigned_decimal_integer(src: &str) -> Result<usize> {
             Ok((0, rest))
         }
     } else {
-        let (num_src, rest) = try!(start_and_continue(src, |c| c.is_digit(10), |c| c.is_digit(10)));
+        let (num_src, rest) = start_and_continue(src, |c| c.is_digit(10), |c| c.is_digit(10))?;
         Ok((usize::from_str(num_src).unwrap(), rest))
     }
 }
@@ -170,15 +170,15 @@ fn terms<'a, 'b>(src: &'a str, var_names: &'b mut NameTable) -> Result<'a, Vec<T
 fn literal<'a, 'b>(src: &'a str, var_names: &'b mut NameTable, predicate_names: &'b mut NameTable) -> Result<'a, Literal> {
     let mut rest = src;
     rest = skip_whitespace(rest);
-    let (predicate_name, r) = try!(lowercase_identifier(rest));
+    let (predicate_name, r) = lowercase_identifier(rest)?;
     rest = r;
     rest = skip_whitespace(rest);
-    rest = try!(character(rest, '(')).1;
+    rest = character(rest, '(')?.1;
     rest = skip_whitespace(rest);
-    let (ts, r) = try!(terms(rest, var_names));
+    let (ts, r) = terms(rest, var_names)?;
     rest = r;
     rest = skip_whitespace(rest);
-    rest = try!(character(rest, ')')).1;
+    rest = character(rest, ')')?.1;
     let predicate = predicate_names.get(predicate_name);
     return Ok((Literal::new_from_vec(predicate, ts), rest));
 }
@@ -195,9 +195,9 @@ pub fn program(source: &str) -> Result<(FactTable<()>, Program)> {
         }
         let start_of_clause = rest;
         let mut var_names = NameTable::new();
-        let (head, r) = try!(literal(rest, &mut var_names, &mut program.predicate_names)
-                             .map(|(lit, r)| (Some(lit), r))
-            .or_else(|_| character(rest, '?').map(|(_, r)| (None, r))));
+        let (head, r) = literal(rest, &mut var_names, &mut program.predicate_names)
+            .map(|(lit, r)| (Some(lit), r))
+            .or_else(|_| character(rest, '?').map(|(_, r)| (None, r)))?;
         rest = r;
         rest = skip_whitespace(rest);
         if let Ok((_, r)) = prefix(rest, ":-") {
@@ -205,7 +205,7 @@ pub fn program(source: &str) -> Result<(FactTable<()>, Program)> {
             let mut literals = Vec::new();
             rest = skip_whitespace(rest);
             loop {
-                let (lit, r) = try!(literal(rest, &mut var_names, &mut program.predicate_names));
+                let (lit, r) = literal(rest, &mut var_names, &mut program.predicate_names)?;
                 rest = r;
                 literals.push(lit);
                 rest = skip_whitespace(rest);

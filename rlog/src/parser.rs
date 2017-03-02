@@ -1,6 +1,5 @@
 use std;
 use unicode_xid::UnicodeXID;
-use db::{DB};
 use program::{Program};
 use name_table::{NameTable};
 use fact_table::{FactTable};
@@ -184,12 +183,7 @@ fn literal<'a, 'b>(src: &'a str, var_names: &'b mut NameTable, predicate_names: 
     return Ok((Literal::new_from_vec(predicate, ts), rest));
 }
 
-pub fn db(source: &str) -> Result<DB> {
-    let ((facts, program), rest) = try!(db_contents(source));
-    return Ok((DB::new(facts, program), rest));
-}
-
-pub fn db_contents(source: &str) -> Result<(FactTable<()>, Program)> {
+pub fn program(source: &str) -> Result<(FactTable<()>, Program)> {
     let mut rest = source;
     let mut facts = FactTable::new();
     let mut program = Program::new();
@@ -245,7 +239,7 @@ pub fn db_contents(source: &str) -> Result<(FactTable<()>, Program)> {
 #[cfg(test)]
 mod tests {
     use super::{unsigned_decimal_integer, character_is, lowercase_identifier, uppercase_identifier,
-    terms, prefix, literal, db_contents};
+    terms, prefix, literal, program};
     use types::{Constant, Term, Literal, Fact};
     use name_table::{NameTable};
 
@@ -330,12 +324,12 @@ mod tests {
     }
 
     #[test]
-    fn test_db() {
-        assert!(db_contents("a(0).").is_ok());
-        assert!(db_contents("a(X) :- b(X)").is_ok());
-        assert!(db_contents("a(X) :- b(X), c(Y)").is_ok());
-        assert!(db_contents("a(X) :- b(X, Y), c(Y), test(Y)").is_ok());
-        assert!(db_contents("#A comment").is_ok());
-        assert!(db_contents("#A comment\nA(0).").is_err());
+    fn test_program() {
+        assert!(program("a(0).").is_ok());
+        assert!(program("a(X) :- b(X)").is_ok());
+        assert!(program("a(X) :- b(X), c(Y)").is_ok());
+        assert!(program("a(X) :- b(X, Y), c(Y), test(Y)").is_ok());
+        assert!(program("#A comment").is_ok());
+        assert!(program("#A comment\nA(0).").is_err());
     }
 }

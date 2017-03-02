@@ -3,7 +3,6 @@ extern crate log;
 extern crate unicode_xid;
 
 mod bottom_up;
-mod db;
 mod matching;
 mod name_table;
 mod parser;
@@ -30,7 +29,7 @@ pub type Result<'a, T> = std::result::Result<T, Error<'a>>;
 
 impl Context {
     pub fn new_from_source(source: &str) -> Result<Self> {
-        parser::db_contents(source)
+        parser::program(source)
             .map(|((facts, program), _)| Context {
                 facts: facts,
                 program: program,

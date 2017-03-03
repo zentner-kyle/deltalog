@@ -50,4 +50,11 @@ impl Context {
         bottom_up::evaluate_bottom_up(&mut self.facts, &self.program);
         return self.facts.as_datalog(&self.program.predicate_names);
     }
+
+    pub fn program_as_string(&self) -> String {
+        use std::fmt::Write;
+        let mut output = String::new();
+        write!(&mut output, "{}", self.program).unwrap();
+        return output;
+    }
 }

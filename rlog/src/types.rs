@@ -99,6 +99,22 @@ impl Clause {
         }
         return max;
     }
+
+    pub fn format(&self, f: &mut fmt::Formatter, var_names: &NameTable, pred_names: &NameTable) -> Result<(), fmt::Error> {
+        if let Some(ref head) = self.head {
+            head.format(f, var_names, pred_names)?;
+            write!(f, " :- ")?;
+        } else {
+            write!(f, "? :- ")?;
+        }
+        for (i, literal) in self.body.iter().enumerate() {
+            literal.format(f, var_names, pred_names)?;
+            if i + 1 != self.body.len() {
+                write!(f, ", ")?;
+            }
+        }
+        return Ok(());
+    }
 }
 
 impl Literal {
@@ -133,6 +149,19 @@ impl Literal {
             }
         }
         Fact::new_from_vec(self.predicate, terms)
+    }
+
+    pub fn format(&self, f: &mut fmt::Formatter, var_names: &NameTable, pred_names: &NameTable) -> Result<(), fmt::Error> {
+        let name = pred_names.get_name(self.predicate).unwrap();
+        write!(f, "{}(", name)?;
+        for (i, term) in self.terms.iter().enumerate() {
+            term.format(f, var_names)?;
+            if i + 1 != self.terms.len() {
+                write!(f, ", ")?;
+            }
+        }
+        write!(f, ")")?;
+        return Ok(());
     }
 }
 
@@ -170,6 +199,21 @@ impl<'a, 'b> fmt::Display for FactDisplayer<'a, 'b> {
             }
         }
         write!(f, ").")?;
+        return Ok(());
+    }
+}
+
+impl Term {
+    pub fn format(&self, f: &mut fmt::Formatter, var_names: &NameTable) -> Result<(), fmt::Error> {
+        match self {
+            &Term::Constant(cst) => {
+                write!(f, "{}", cst)?;
+            },
+            &Term::Variable(var) => {
+                let name = var_names.get_name(var).unwrap();
+                write!(f, "{}", name)?;
+            }
+        }
         return Ok(());
     }
 }

@@ -1,4 +1,5 @@
 use std::collections::hash_map::{HashMap};
+use std::fmt;
 
 use types::{Clause, ClauseIndex};
 
@@ -29,5 +30,15 @@ impl Program {
             }
         }
         return count;
+    }
+}
+
+impl fmt::Display for Program {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        for (i, clause) in self.clauses.iter().enumerate() {
+            clause.format(f, self.clause_variable_names.get(&i).unwrap(), &self.predicate_names)?;
+            write!(f, "\n")?;
+        }
+        return Ok(());
     }
 }

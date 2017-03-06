@@ -2,7 +2,7 @@ use std::collections::hash_map;
 use std::collections::hash_map::{HashMap, Entry};
 use std::iter;
 
-use matching::{Bindings};
+use bindings::{Bindings};
 use name_table::{NameTable};
 use types::{Fact, Predicate, Literal};
 

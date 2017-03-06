@@ -1,4 +1,4 @@
-use matching::{Bindings};
+use bindings::{Bindings};
 use fact_table::{FactTable, TruthValue};
 use types::{Clause};
 use program::{Program};

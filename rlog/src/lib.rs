@@ -9,6 +9,7 @@ mod parser;
 mod program;
 mod types;
 mod fact_table;
+mod truth_value;
 
 pub struct Context {
     facts: fact_table::FactTable<()>,

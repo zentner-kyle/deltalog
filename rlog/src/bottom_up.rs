@@ -1,5 +1,6 @@
 use bindings::{Bindings};
-use fact_table::{FactTable, TruthValue};
+use fact_table::{FactTable};
+use truth_value::{TruthValue};
 use types::{Clause};
 use program::{Program};
 

@@ -5,16 +5,7 @@ use std::iter;
 use bindings::{Bindings};
 use name_table::{NameTable};
 use types::{Fact, Predicate, Literal};
-
-pub trait TruthValue : Clone + PartialEq {
-    fn default() -> Self;
-    fn join(&self, new: Self);
-}
-
-impl TruthValue for () {
-    fn default() -> Self {}
-    fn join(&self, _: Self) {}
-}
+use truth_value::{TruthValue};
 
 pub struct FactTableIter<'a, T: 'a> {
     map_iter: hash_map::Iter<'a, Fact, T>,

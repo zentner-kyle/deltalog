@@ -1,6 +1,7 @@
 use std::iter;
 
 use types::{Constant, Term, Literal, Fact};
+use truth_value::{TruthValue};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Binding {
@@ -9,21 +10,33 @@ enum Binding {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Bindings {
-    bindings: Vec<Binding>
+pub struct Bindings<T> where T: TruthValue {
+    bindings: Vec<Binding>,
+    truth: T,
 }
 
-impl Bindings {
+impl<T> Bindings<T> where T: TruthValue {
+
+    #[cfg(test)]
     pub fn new(num_vars: usize) -> Self {
         Bindings {
             bindings: iter::repeat(Binding::Unbound).take(num_vars).collect(),
+            truth: T::default(),
         }
     }
 
-    pub fn refine(&self, literal: &Literal, fact: &Fact) -> Option<Bindings> {
+    pub fn with_truth(num_vars: usize, truth: T) -> Self {
+        Bindings {
+            bindings: iter::repeat(Binding::Unbound).take(num_vars).collect(),
+            truth: truth,
+        }
+    }
+
+    pub fn refine(&self, literal: &Literal, fact: &Fact, truth: &T) -> Option<Self> {
         assert_eq!(literal.predicate, fact.predicate);
         assert_eq!(literal.terms.len(), fact.terms.len());
         let mut next_binds = self.clone();
+        next_binds.truth = next_binds.truth.both(truth);
         for (term, constant) in literal.terms.iter().zip(fact.terms.iter()) {
             match term {
                 &Term::Constant(cst) => {
@@ -87,48 +100,48 @@ mod tests {
 
     #[test]
     fn match_no_variables() {
-        let binds = Bindings::new(0);
+        let binds = Bindings::<()>::new(0);
         let lit = Literal::new_from_vec(0, vec![Term::Constant(0), Term::Constant(1), Term::Constant(2)]);
         let fact = Fact::new_from_vec(0, vec![0, 1, 2]);
-        assert!(binds.refine(&lit, &fact).is_some());
+        assert!(binds.refine(&lit, &fact, &()).is_some());
     }
 
     #[test]
     fn match_one_variable_twice() {
-        let binds = Bindings::new(1);
+        let binds = Bindings::<()>::new(1);
         let lit = Literal::new_from_vec(0, vec![Term::Variable(0), Term::Variable(0)]);
         let fact = Fact::new_from_vec(0, vec![1, 1]);
-        assert!(binds.refine(&lit, &fact).is_some());
+        assert!(binds.refine(&lit, &fact, &()).is_some());
     }
 
     #[test]
     fn dont_match_one_variable_twice() {
-        let binds = Bindings::new(1);
+        let binds = Bindings::<()>::new(1);
         let lit = Literal::new_from_vec(0, vec![Term::Variable(0), Term::Variable(0)]);
         let fact = Fact::new_from_vec(0, vec![1, 2]);
-        assert!(binds.refine(&lit, &fact).is_none());
+        assert!(binds.refine(&lit, &fact, &()).is_none());
     }
 
     #[test]
     fn bind_two_variables() {
-        let binds = Bindings::new(2);
+        let binds = Bindings::<()>::new(2);
         let lit = Literal::new_from_vec(0, vec![Term::Variable(0), Term::Variable(1)]);
         let fact = Fact::new_from_vec(0, vec![2, 3]);
-        let binds = binds.refine(&lit, &fact).unwrap();
+        let binds = binds.refine(&lit, &fact, &()).unwrap();
 
         let lit2 = Literal::new_from_vec(1, vec![Term::Variable(1), Term::Variable(0)]);
         let good_lit2_fact = Fact::new_from_vec(1, vec![3, 2]);
-        assert!(binds.clone().refine(&lit2, &good_lit2_fact).is_some());
+        assert!(binds.clone().refine(&lit2, &good_lit2_fact, &()).is_some());
         let bad_lit2_fact = Fact::new_from_vec(1, vec![2, 3]);
-        assert!(binds.clone().refine(&lit2, &bad_lit2_fact).is_none());
+        assert!(binds.clone().refine(&lit2, &bad_lit2_fact, &()).is_none());
     }
 
     #[test]
     fn solidify_one_variable() {
-        let binds = Bindings::new(1);
+        let binds = Bindings::<()>::new(1);
         let lit = Literal::new_from_vec(0, vec![Term::Variable(0), Term::Variable(0)]);
         let fact = Fact::new_from_vec(0, vec![1, 1]);
-        let binds = binds.refine(&lit, &fact).unwrap();
+        let binds = binds.refine(&lit, &fact, &()).unwrap();
 
         let lit2 = Literal::new_from_vec(1, vec![Term::Variable(0), Term::Constant(2)]);
         assert!(binds.all_variables_in_literal_bound(&lit2));

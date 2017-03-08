@@ -183,7 +183,7 @@ fn literal<'a, 'b>(src: &'a str, var_names: &'b mut NameTable, predicate_names: 
     return Ok((Literal::new_from_vec(predicate, ts), rest));
 }
 
-pub fn program(source: &str) -> Result<(FactTable<()>, Program)> {
+pub fn program(source: &str) -> Result<(FactTable<()>, Program<()>)> {
     let mut rest = source;
     let mut facts = FactTable::new();
     let mut program = Program::new();
@@ -222,6 +222,7 @@ pub fn program(source: &str) -> Result<(FactTable<()>, Program)> {
             if clause.is_valid() {
                 program.clause_variable_names.insert(program.clauses.len(), var_names);
                 program.clauses.push(clause);
+                program.clause_weights.push(());
             } else {
                 return err_msg("Invalid clause", start_of_clause);
             }

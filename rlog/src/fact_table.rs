@@ -7,17 +7,17 @@ use name_table::{NameTable};
 use types::{Fact, Predicate, Literal};
 use truth_value::{TruthValue};
 
-pub struct FactTableIter<'a, T: 'a> {
+pub struct FactTableIter<'a, T: 'a> where T: TruthValue {
     map_iter: hash_map::Iter<'a, Fact, T>,
     literal: &'a Literal,
-    bindings: Bindings,
+    bindings: Bindings<T>,
 }
 
-impl<'a, T> Iterator for FactTableIter<'a, T> {
-    type Item=(Bindings, &'a Fact, &'a T);
+impl<'a, T> Iterator for FactTableIter<'a, T> where T: TruthValue {
+    type Item=(Bindings<T>, &'a Fact, &'a T);
     fn next(&mut self) -> Option<Self::Item> {
         while let Some((fact, truth)) = self.map_iter.next() {
-            if let Some(bindings) = self.bindings.refine(self.literal, fact) {
+            if let Some(bindings) = self.bindings.refine(self.literal, fact, truth) {
                 return Some((bindings, fact, truth));
             }
         }
@@ -54,7 +54,7 @@ impl<T> FactTable<T> where T: TruthValue {
         return was_new_fact_added;
     }
 
-    pub fn iter<'a, 'b, 'c>(&'a self, literal: &'b Literal, bindings: Bindings) -> FactTableIter<'c, T> where 'a : 'c, 'b : 'c {
+    pub fn iter<'a, 'b, 'c>(&'a self, literal: &'b Literal, bindings: Bindings<T>) -> FactTableIter<'c, T> where 'a : 'c, 'b : 'c {
         FactTableIter::<'c, T> {
             map_iter: self.maps[literal.predicate].iter(),
             literal: literal,
@@ -84,7 +84,8 @@ impl<T> FactTable<T> where T: TruthValue {
         let mut map = &mut self.maps[fact.predicate];
         match map.entry(fact) {
             Entry::Occupied(mut pair) => {
-                pair.get_mut().join(truth);
+                let truth = pair.get_mut();
+                *truth = truth.either(truth);
                 false
             },
             Entry::Vacant(pair) => {

@@ -13,7 +13,7 @@ mod truth_value;
 
 pub struct Context {
     facts: fact_table::FactTable<()>,
-    program: program::Program,
+    program: program::Program<()>,
 }
 
 #[derive(Debug)]

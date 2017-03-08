@@ -66,8 +66,8 @@ impl<T> FactTable<T> where T: TruthValue {
         use std::fmt::Write;
         let mut output = String::new();
         for table in &self.maps {
-            for fact in table.keys() {
-                writeln!(&mut output, "{}", fact.to_display(predicate_names)).unwrap();
+            for (fact, truth) in table.iter() {
+                writeln!(&mut output, "{}{}", truth.as_datalog(), fact.to_display(predicate_names)).unwrap();
             }
         }
         return output;

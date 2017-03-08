@@ -4,6 +4,7 @@ use program::{Program};
 use name_table::{NameTable};
 use fact_table::{FactTable};
 use std::str::{FromStr};
+use truth_value::{TruthValue};
 
 use types::{Term, Literal, Clause};
 
@@ -183,10 +184,27 @@ fn literal<'a, 'b>(src: &'a str, var_names: &'b mut NameTable, predicate_names: 
     return Ok((Literal::new_from_vec(predicate, ts), rest));
 }
 
-pub fn program(source: &str) -> Result<(FactTable<()>, Program<()>)> {
+pub fn weight<T>(source: &str) -> Result<T> where T: TruthValue {
+    let mut rest = source;
+    rest = prefix(rest, "weight")?.1;
+    rest = skip_whitespace(rest);
+    rest = character(rest, '(')?.1;
+    rest = skip_whitespace(rest);
+    if let Some((truth, r)) = T::parse(rest) {
+        rest = r;
+        rest = skip_whitespace(rest);
+        rest = character(rest, ')')?.1;
+        return Ok((truth, rest));
+    } else {
+        return err_msg("Invalid weight", rest);
+    }
+}
+
+pub fn program<T>(source: &str) -> Result<(FactTable<T>, Program<T>)> where T: TruthValue {
     let mut rest = source;
     let mut facts = FactTable::new();
     let mut program = Program::new();
+    let mut current_weight = T::default();
     loop {
         rest = skip_whitespace(rest);
         if rest.len() == 0 {
@@ -194,6 +212,11 @@ pub fn program(source: &str) -> Result<(FactTable<()>, Program<()>)> {
             return Ok(((facts, program), rest));
         }
         let start_of_clause = rest;
+        if let Ok((weight, r)) = weight(rest) {
+            rest = r;
+            rest = skip_whitespace(rest);
+            current_weight = weight;
+        }
         let mut var_names = NameTable::new();
         let (head, r) = literal(rest, &mut var_names, &mut program.predicate_names)
             .map(|(lit, r)| (Some(lit), r))
@@ -222,7 +245,7 @@ pub fn program(source: &str) -> Result<(FactTable<()>, Program<()>)> {
             if clause.is_valid() {
                 program.clause_variable_names.insert(program.clauses.len(), var_names);
                 program.clauses.push(clause);
-                program.clause_weights.push(());
+                program.clause_weights.push(current_weight.clone());
             } else {
                 return err_msg("Invalid clause", start_of_clause);
             }
@@ -231,7 +254,7 @@ pub fn program(source: &str) -> Result<(FactTable<()>, Program<()>)> {
             if var_names.to_reverse().len() != 0 {
                 return err_msg("Fact contained variables", start_of_clause);
             }
-            facts.add_fact(lit.to_fact(), ());
+            facts.add_fact(lit.to_fact(), current_weight.clone());
         }
     }
 }
@@ -324,11 +347,11 @@ mod tests {
 
     #[test]
     fn test_program() {
-        assert!(program("a(0).").is_ok());
-        assert!(program("a(X) :- b(X)").is_ok());
-        assert!(program("a(X) :- b(X), c(Y)").is_ok());
-        assert!(program("a(X) :- b(X, Y), c(Y), test(Y)").is_ok());
-        assert!(program("#A comment").is_ok());
-        assert!(program("#A comment\nA(0).").is_err());
+        assert!(program::<()>("a(0).").is_ok());
+        assert!(program::<()>("a(X) :- b(X)").is_ok());
+        assert!(program::<()>("a(X) :- b(X), c(Y)").is_ok());
+        assert!(program::<()>("a(X) :- b(X, Y), c(Y), test(Y)").is_ok());
+        assert!(program::<()>("#A comment").is_ok());
+        assert!(program::<()>("#A comment\nA(0).").is_err());
     }
 }

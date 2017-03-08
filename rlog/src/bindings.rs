@@ -31,12 +31,17 @@ impl<T> Bindings<T> where T: TruthValue {
             truth: truth,
         }
     }
+    
+    pub fn get_truth(&self) -> &T {
+        &self.truth
+    }
 
     pub fn refine(&self, literal: &Literal, fact: &Fact, truth: &T) -> Option<Self> {
         assert_eq!(literal.predicate, fact.predicate);
         assert_eq!(literal.terms.len(), fact.terms.len());
         let mut next_binds = self.clone();
-        next_binds.truth = next_binds.truth.both(truth);
+        let new_truth = next_binds.truth.both(truth);
+        next_binds.truth = new_truth;
         for (term, constant) in literal.terms.iter().zip(fact.terms.iter()) {
             match term {
                 &Term::Constant(cst) => {

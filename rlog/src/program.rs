@@ -38,6 +38,8 @@ impl<T> Program<T> where T: TruthValue {
 impl<T> fmt::Display for Program<T> where T: TruthValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         for (i, clause) in self.clauses.iter().enumerate() {
+            let weight = self.clause_weights.get(i).unwrap();
+            write!(f, "{}", weight.as_datalog())?;
             clause.format(f, self.clause_variable_names.get(&i).unwrap(), &self.predicate_names)?;
             write!(f, "\n")?;
         }

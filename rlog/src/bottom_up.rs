@@ -12,11 +12,11 @@ fn match_clause<T>(facts: &FactTable<T>, clause: &Clause, truth: &T) -> FactTabl
     fact_iters.push(facts.iter(&clause.body[0], Bindings::with_truth(clause.num_variables(), truth.clone())));
     loop {
         let lit_idx = fact_iters.len() - 1;
-        if let Some((binds, _fact, truth)) = fact_iters[lit_idx].next() {
+        if let Some((binds, _fact, _)) = fact_iters[lit_idx].next() {
             if lit_idx + 1 <= literals_to_match {
                 fact_iters.push(facts.iter(&clause.body[lit_idx], binds));
             } else if let Some(ref head) = clause.head {
-                facts_to_add.add_fact(binds.solidify(head), truth.clone());
+                facts_to_add.add_fact(binds.solidify(head), binds.get_truth().clone());
             }
         } else {
             if lit_idx == 0 {

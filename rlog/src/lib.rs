@@ -9,11 +9,11 @@ mod parser;
 mod program;
 mod types;
 mod fact_table;
-mod truth_value;
+pub mod truth_value;
 
-pub struct Context {
-    facts: fact_table::FactTable<()>,
-    program: program::Program<()>,
+pub struct Context<T> where T: truth_value::TruthValue {
+    facts: fact_table::FactTable<T>,
+    program: program::Program<T>,
 }
 
 #[derive(Debug)]
@@ -28,7 +28,7 @@ pub enum Error<'a> {
 
 pub type Result<'a, T> = std::result::Result<T, Error<'a>>;
 
-impl Context {
+impl<T> Context<T> where T: truth_value::TruthValue {
     pub fn new_from_source(source: &str) -> Result<Self> {
         parser::program(source)
             .map(|((facts, program), _)| Context {

@@ -1,11 +1,11 @@
 [package]
 name = "logician"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Kyle Zentner <zentner.kyle@gmail.com>"]
 
 [dependencies]
 clap = "2.20.4"
 
 [dependencies.rlog]
-version = "^0.1"
+version = "0.2"
 path = "../rlog"

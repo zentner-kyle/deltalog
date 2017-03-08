@@ -19,7 +19,7 @@ fn main() {
     let mut source = String::new();
     let mut file = fs::File::open(input).expect("Could not open file");
     file.read_to_string(&mut source).expect("Error reading input");
-    let mut ctxt = rlog::Context::new_from_source(&source).expect("Error creating context");
+    let mut ctxt = rlog::Context::<rlog::truth_value::MaxFloat64>::new_from_source(&source).expect("Error creating context");
     println!("Program:\n{}", ctxt.program_as_string());
     println!("Meaning of program:\n{}", ctxt.facts_as_string());
 }

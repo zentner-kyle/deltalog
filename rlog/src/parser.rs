@@ -184,13 +184,13 @@ fn literal<'a, 'b>(src: &'a str, var_names: &'b mut NameTable, predicate_names: 
     return Ok((Literal::new_from_vec(predicate, ts), rest));
 }
 
-pub fn weight<T>(source: &str) -> Result<T> where T: TruthValue {
+pub fn weight<T>(source: &str) -> Result<T::Dual> where T: TruthValue {
     let mut rest = source;
     rest = prefix(rest, "weight")?.1;
     rest = skip_whitespace(rest);
     rest = character(rest, '(')?.1;
     rest = skip_whitespace(rest);
-    if let Some((truth, r)) = T::parse(rest) {
+    if let Some((truth, r)) = T::parse_dual(rest) {
         rest = r;
         rest = skip_whitespace(rest);
         rest = character(rest, ')')?.1;
@@ -200,11 +200,29 @@ pub fn weight<T>(source: &str) -> Result<T> where T: TruthValue {
     }
 }
 
+pub fn confidence<T>(source: &str) -> Result<T> where T: TruthValue {
+    let mut rest = source;
+    rest = prefix(rest, "confidence")?.1;
+    rest = skip_whitespace(rest);
+    rest = character(rest, '(')?.1;
+    rest = skip_whitespace(rest);
+    if let Some((truth, r)) = T::parse(rest) {
+        rest = r;
+        rest = skip_whitespace(rest);
+        rest = character(rest, ')')?.1;
+        return Ok((truth, rest));
+    } else {
+        return err_msg("Invalid confidence", rest);
+    }
+}
+
+
 pub fn program<T>(source: &str) -> Result<(FactTable<T>, Program<T>)> where T: TruthValue {
     let mut rest = source;
     let mut facts = FactTable::new();
     let mut program = Program::new();
-    let mut current_weight = T::default();
+    let mut current_weight = T::dual_default();
+    let mut current_confidence = T::default();
     loop {
         rest = skip_whitespace(rest);
         if rest.len() == 0 {
@@ -212,10 +230,15 @@ pub fn program<T>(source: &str) -> Result<(FactTable<T>, Program<T>)> where T: T
             return Ok(((facts, program), rest));
         }
         let start_of_clause = rest;
-        if let Ok((weight, r)) = weight(rest) {
+        if let Ok((weight, r)) = weight::<T>(rest) {
             rest = r;
             rest = skip_whitespace(rest);
             current_weight = weight;
+        }
+        if let Ok((confidence, r)) = confidence(rest) {
+            rest = r;
+            rest = skip_whitespace(rest);
+            current_confidence = confidence;
         }
         let mut var_names = NameTable::new();
         let (head, r) = literal(rest, &mut var_names, &mut program.predicate_names)
@@ -254,7 +277,7 @@ pub fn program<T>(source: &str) -> Result<(FactTable<T>, Program<T>)> where T: T
             if var_names.to_reverse().len() != 0 {
                 return err_msg("Fact contained variables", start_of_clause);
             }
-            facts.add_fact(lit.to_fact(), current_weight.clone());
+            facts.add_fact(lit.to_fact(), current_confidence.clone());
         }
     }
 }

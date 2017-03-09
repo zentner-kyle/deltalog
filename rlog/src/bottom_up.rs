@@ -4,12 +4,12 @@ use truth_value::{TruthValue};
 use types::{Clause};
 use program::{Program};
 
-fn match_clause<T>(facts: &FactTable<T>, clause: &Clause, truth: &T) -> FactTable<T> where T: TruthValue {
+fn match_clause<T>(facts: &FactTable<T>, clause: &Clause, weight: &T::Dual) -> FactTable<T> where T: TruthValue {
     let mut facts_to_add = FactTable::new();
     let literals_to_match = clause.body.len();
 
     let mut fact_iters = Vec::with_capacity(literals_to_match);
-    fact_iters.push(facts.iter(&clause.body[0], Bindings::with_truth(clause.num_variables(), truth.clone())));
+    fact_iters.push(facts.iter(&clause.body[0], Bindings::with_weight(clause.num_variables(), weight.clone())));
     loop {
         let lit_idx = fact_iters.len() - 1;
         if let Some((binds, _fact, _)) = fact_iters[lit_idx].next() {

@@ -8,7 +8,7 @@ use truth_value::{TruthValue};
 #[derive(Debug)]
 pub struct Program<T> where T: TruthValue {
     pub clauses: Vec<Clause>,
-    pub clause_weights: Vec<T>,
+    pub clause_weights: Vec<T::Dual>,
     pub predicate_names: NameTable,
     pub clause_variable_names: HashMap<ClauseIndex, NameTable>,
 }
@@ -39,7 +39,7 @@ impl<T> fmt::Display for Program<T> where T: TruthValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         for (i, clause) in self.clauses.iter().enumerate() {
             let weight = self.clause_weights.get(i).unwrap();
-            write!(f, "{}", weight.as_datalog())?;
+            write!(f, "{}", T::dual_as_datalog(weight))?;
             clause.format(f, self.clause_variable_names.get(&i).unwrap(), &self.predicate_names)?;
             write!(f, "\n")?;
         }

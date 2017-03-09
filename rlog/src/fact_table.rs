@@ -84,8 +84,8 @@ impl<T> FactTable<T> where T: TruthValue {
         let mut map = &mut self.maps[fact.predicate];
         match map.entry(fact) {
             Entry::Occupied(mut pair) => {
-                let truth = pair.get_mut();
-                *truth = truth.either(truth);
+                let t = pair.get_mut();
+                *t = T::join(t, &truth);
                 false
             },
             Entry::Vacant(pair) => {

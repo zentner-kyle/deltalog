@@ -12,6 +12,7 @@ enum Binding {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Bindings<T> where T: TruthValue {
     bindings: Vec<Binding>,
+    weight: T::Dual,
     truth: T,
 }
 
@@ -21,26 +22,28 @@ impl<T> Bindings<T> where T: TruthValue {
     pub fn new(num_vars: usize) -> Self {
         Bindings {
             bindings: iter::repeat(Binding::Unbound).take(num_vars).collect(),
+            weight: T::dual_default(),
             truth: T::default(),
         }
     }
 
-    pub fn with_truth(num_vars: usize, truth: T) -> Self {
+    pub fn with_weight(num_vars: usize, weight: T::Dual) -> Self {
         Bindings {
             bindings: iter::repeat(Binding::Unbound).take(num_vars).collect(),
-            truth: truth,
+            weight: weight,
+            truth: T::default(),
         }
     }
     
-    pub fn get_truth(&self) -> &T {
-        &self.truth
+    pub fn get_truth(&self) -> T {
+        T::finalize(&self.weight, &self.truth)
     }
 
     pub fn refine(&self, literal: &Literal, fact: &Fact, truth: &T) -> Option<Self> {
         assert_eq!(literal.predicate, fact.predicate);
         assert_eq!(literal.terms.len(), fact.terms.len());
         let mut next_binds = self.clone();
-        let new_truth = next_binds.truth.both(truth);
+        let new_truth = T::merge(&next_binds.truth, truth);
         next_binds.truth = new_truth;
         for (term, constant) in literal.terms.iter().zip(fact.terms.iter()) {
             match term {

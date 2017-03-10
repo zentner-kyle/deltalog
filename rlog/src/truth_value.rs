@@ -6,9 +6,12 @@ pub trait TruthValue : Clone + PartialEq + Debug {
     fn dual_default() -> Self::Dual;
     fn parse(&str) -> Option<(Self, &str)>;
     fn parse_dual(&str) -> Option<(Self::Dual, &str)>;
-    fn merge(a: &Self, b: &Self) -> Self;
-    fn finalize(dual: &Self::Dual, a: &Self) -> Self;
     fn join(a: &Self, b: &Self) -> Self;
+    fn back_join(a: &Self, b: &Self, err: &Self) -> (Self, Self);
+    fn merge(a: &Self, b: &Self) -> Self;
+    fn back_merge(a: &Self, b: &Self, err: &Self) -> (Self, Self);
+    fn finalize(dual: &Self::Dual, a: &Self) -> Self;
+    fn back_finalize(dual: &Self::Dual, a: &Self, err: &Self) -> Self;
     fn as_datalog(&self) -> String;
     fn dual_as_datalog(dual: &Self::Dual) -> String;
 }
@@ -18,8 +21,11 @@ impl TruthValue for () {
     fn default() -> Self {}
     fn dual_default() -> Self::Dual {}
     fn join(_: &Self, _: &Self) -> Self {}
+    fn back_join(_: &Self, _: &Self, _: &Self) -> (Self, Self) { ((), ()) }
     fn merge(_: &Self, _: &Self) -> Self {}
+    fn back_merge(_: &Self, _: &Self, _: &Self) -> (Self, Self) { ((), ()) }
     fn finalize(_: &Self::Dual, _: &Self) -> Self {}
+    fn back_finalize(_: &Self::Dual, _: &Self, _: &Self) -> Self {}
     fn parse(_: &str) -> Option<(Self, &str)> { None }
     fn parse_dual(_: &str) -> Option<(Self::Dual, &str)> { None }
     fn as_datalog(&self) -> String {
@@ -48,12 +54,32 @@ impl TruthValue for MaxFloat64 {
         MaxFloat64(f64::max(a.0, b.0))
     }
 
+    fn back_join(a: &Self, b: &Self, err: &Self) -> (Self, Self) {
+        if a.0 >= b.0 {
+            (*err, MaxFloat64(0.0))
+        } else {
+            (MaxFloat64(0.0), *err)
+        }
+    }
+
     fn merge(a: &Self, b: &Self) -> Self {
         MaxFloat64(f64::min(a.0, b.0))
     }
 
+    fn back_merge(a: &Self, b: &Self, err: &Self) -> (Self, Self) {
+        if a.0 <= b.0 {
+            (*err, MaxFloat64(0.0))
+        } else {
+            (MaxFloat64(0.0), *err)
+        }
+    }
+
     fn finalize(dual: &Self::Dual, a: &Self) -> Self {
         MaxFloat64(dual * a.0)
+    }
+
+    fn back_finalize(dual: &Self::Dual, _a: &Self, err: &Self) -> Self {
+        MaxFloat64(err.0 / dual)
     }
 
     fn parse(src: &str) -> Option<(Self, &str)> {

@@ -36,18 +36,32 @@ impl TruthValue for () {
     }
 }
 
+fn parse_float(src: &str) -> Option<(f64, &str)> {
+    if let Some(end) = src.find(')') {
+        use std::str::FromStr;
+        let (f_src, rest) = src.split_at(end);
+        if let Ok(f) = f64::from_str(f_src) {
+            return Some((f, rest));
+        }
+    }
+    return None;
+}
+
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct MaxFloat64(f64);
 
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct MaxFloat64Dual(f64);
+
 impl TruthValue for MaxFloat64 {
-    type Dual = f64;
+    type Dual = MaxFloat64Dual;
 
     fn default() -> Self {
         MaxFloat64(1.0) 
     }
 
     fn dual_default() -> Self::Dual {
-        1.0
+        MaxFloat64Dual(1.0) 
     }
 
     fn join(a: &Self, b: &Self) -> Self {
@@ -75,26 +89,19 @@ impl TruthValue for MaxFloat64 {
     }
 
     fn finalize(dual: &Self::Dual, a: &Self) -> Self {
-        MaxFloat64(dual * a.0)
+        MaxFloat64(dual.0 * a.0)
     }
 
     fn back_finalize(dual: &Self::Dual, _a: &Self, err: &Self) -> Self {
-        MaxFloat64(err.0 / dual)
+        MaxFloat64(err.0 / dual.0)
     }
 
     fn parse(src: &str) -> Option<(Self, &str)> {
-        Self::parse_dual(src).map(|(f, rest)| (MaxFloat64(f), rest))
+        parse_float(src).map(|(f, rest)| (MaxFloat64(f), rest))
     }
 
     fn parse_dual(src: &str) -> Option<(Self::Dual, &str)> {
-        if let Some(end) = src.find(')') {
-            use std::str::FromStr;
-            let (f_src, rest) = src.split_at(end);
-            if let Ok(f) = f64::from_str(f_src) {
-                return Some((f, rest));
-            }
-        }
-        return None;
+        parse_float(src).map(|(f, rest)| (MaxFloat64Dual(f), rest))
     }
 
     fn as_datalog(&self) -> String {
@@ -102,6 +109,6 @@ impl TruthValue for MaxFloat64 {
     }
 
     fn dual_as_datalog(dual: &Self::Dual) -> String {
-        return format!("weight({}) ", dual);
+        return format!("weight({}) ", dual.0);
     }
 }

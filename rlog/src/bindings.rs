@@ -3,13 +3,13 @@ use std::iter;
 use types::{Constant, Term, Literal, Fact};
 use truth_value::{TruthValue};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash)]
 enum Binding {
     Bound(Constant),
     Unbound,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Hash)]
 pub struct Bindings<T> where T: TruthValue {
     bindings: Vec<Binding>,
     weight: T::Dual,

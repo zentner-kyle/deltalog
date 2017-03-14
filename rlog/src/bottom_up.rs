@@ -16,7 +16,7 @@ fn match_clause<T>(facts: &FactTable<T>, clause: &Clause, weight: &T::Dual) -> F
             if lit_idx + 1 <= literals_to_match {
                 fact_iters.push(facts.iter(&clause.body[lit_idx], binds));
             } else if let Some(ref head) = clause.head {
-                facts_to_add.add_fact(binds.solidify(head), binds.get_truth().clone());
+                facts_to_add.add_fact(binds.solidify(head), binds.get_truth());
             }
         } else {
             if lit_idx == 0 {

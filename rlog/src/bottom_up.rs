@@ -1,10 +1,10 @@
 use bindings::{Bindings};
 use fact_table::{FactTable};
 use truth_value::{TruthValue};
-use types::{Clause};
+use types::{Clause, ClauseIndex};
 use program::{Program};
 
-fn match_clause<T>(facts: &FactTable<T>, clause: &Clause, weight: &T::Dual) -> FactTable<T> where T: TruthValue {
+fn match_clause<T>(facts: &FactTable<T>, clause: &Clause, clause_idx: ClauseIndex, weight: &T::Dual) -> FactTable<T> where T: TruthValue {
     let mut facts_to_add = FactTable::new();
     let literals_to_match = clause.body.len();
 
@@ -16,7 +16,7 @@ fn match_clause<T>(facts: &FactTable<T>, clause: &Clause, weight: &T::Dual) -> F
             if lit_idx + 1 <= literals_to_match {
                 fact_iters.push(facts.iter(&clause.body[lit_idx], binds));
             } else if let Some(ref head) = clause.head {
-                facts_to_add.add_fact(binds.solidify(head), binds.get_truth());
+                facts_to_add.add_match(binds.solidify(head), clause_idx, binds);
             }
         } else {
             if lit_idx == 0 {
@@ -32,8 +32,8 @@ fn match_clause<T>(facts: &FactTable<T>, clause: &Clause, weight: &T::Dual) -> F
 pub fn evaluate_bottom_up<T>(facts: &mut FactTable<T>, program: &Program<T>) where T: TruthValue {
     loop {
         let mut fact_added_this_iter = false;
-        for (clause, truth) in program.clauses.iter().zip(program.clause_weights.iter().cycle()) {
-            let facts_to_add = match_clause(&facts, clause, truth);
+        for ((clause_idx, clause), truth) in program.clauses.iter().enumerate().zip(program.clause_weights.iter().cycle()) {
+            let facts_to_add = match_clause(&facts, clause, clause_idx, truth);
             fact_added_this_iter |= facts.merge_new_generation(facts_to_add);
         }
         if !fact_added_this_iter {
@@ -79,7 +79,7 @@ mod tests {
         expected.add_fact(Fact::new_from_vec(1, vec![
             2
         ]), ());
-        assert_eq!(expected, facts);
+        assert!(expected.eq_facts(&facts));
     }
 
     #[test]
@@ -127,6 +127,7 @@ mod tests {
         expected.add_fact(Fact::new_from_vec(2, vec![
             2
         ]), ());
-        assert_eq!(expected, facts);
+        println!("{:?}", facts); 
+        assert!(expected.eq_facts(&facts));
     }
 }

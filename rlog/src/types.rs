@@ -7,25 +7,25 @@ pub type Constant = usize;
 pub type Variable = usize;
 pub type ClauseIndex = usize;
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Copy)]
 pub enum Term {
     Constant(Constant),
     Variable(Variable),
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Literal {
     pub predicate: Predicate,
     pub terms: Vec<Term>,
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Clause {
     pub head: Option<Literal>,
     pub body: Vec<Literal>,
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Fact {
     pub predicate: Predicate,
     pub terms: Vec<Constant>,

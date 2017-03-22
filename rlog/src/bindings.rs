@@ -43,7 +43,7 @@ impl<T> Bindings<T> where T: TruthValue {
         assert_eq!(literal.predicate, fact.predicate);
         assert_eq!(literal.terms.len(), fact.terms.len());
         let mut next_binds = self.clone();
-        let new_truth = T::merge(&next_binds.truth, truth);
+        let new_truth = T::both(&next_binds.truth, truth);
         next_binds.truth = new_truth;
         for (term, constant) in literal.terms.iter().zip(fact.terms.iter()) {
             match term {

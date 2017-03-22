@@ -4,35 +4,34 @@ use std::iter;
 
 use bindings::{Bindings};
 use name_table::{NameTable};
-use types::{Fact, Predicate, Literal};
+use types::{Fact, Predicate, Literal, ClauseIndex};
 use truth_value::{TruthValue};
 
 #[derive(Clone, Debug, PartialEq)]
 struct FactRecord<T> where T: TruthValue {
+    bindings_set: Vec<(ClauseIndex, Bindings<T>)>,
     truth: T,
-    bindings_set: Vec<Bindings<T>>,
 }
 
 impl<T> FactRecord<T> where T: TruthValue {
-    #[allow(dead_code)]
-    fn new(truth: T, bindings: Bindings<T>) -> Self {
+    fn new(truth: T, clause_idx: usize, bindings: Bindings<T>) -> Self {
         let mut bind_set = Vec::new();
-        bind_set.push(bindings);
+        bind_set.push((clause_idx, bindings));
         FactRecord {
-            truth: truth,
             bindings_set: bind_set,
+            truth: truth,
         }
     }
 
     fn from_truth(truth: T) -> Self {
         FactRecord {
-            truth: truth,
             bindings_set: Vec::new(),
+            truth: truth,
         }
     }
 
     fn join(&mut self, other: Self) {
-        self.truth = T::join(&self.truth, &other.truth);
+        self.truth = T::either(&self.truth, &other.truth);
         self.bindings_set.extend(other.bindings_set);
     }
 }
@@ -56,7 +55,7 @@ impl<'a, T> Iterator for FactTableIter<'a, T> where T: TruthValue {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct FactTable<T> where T: TruthValue {
     maps: Vec<HashMap<Fact, FactRecord<T>>>,
 }
@@ -105,9 +104,12 @@ impl<T> FactTable<T> where T: TruthValue {
         return output;
     }
 
-    #[allow(dead_code)]
-    pub fn all_facts(&self) -> Vec<Fact> {
-        self.maps.iter().flat_map(|t| t.keys()).cloned().collect()
+    pub fn all_facts(&self) -> Vec<(Fact, T)> {
+        self.maps
+            .iter()
+            .flat_map(|t| t.iter())
+            .map(|(f, r)| (f.clone(), r.truth.clone()))
+            .collect()
     }
 
     // Returns true if the fact was not previously in the table.
@@ -117,7 +119,7 @@ impl<T> FactTable<T> where T: TruthValue {
         match map.entry(fact) {
             Entry::Occupied(mut pair) => {
                 let mut record = pair.get_mut();
-                record.truth = T::join(&record.truth, &truth);
+                record.truth = T::either(&record.truth, &truth);
                 false
             },
             Entry::Vacant(pair) => {
@@ -142,5 +144,29 @@ impl<T> FactTable<T> where T: TruthValue {
                 true
             }
         }
+    }
+
+    pub fn add_match(&mut self, fact: Fact, clause: ClauseIndex, bindings: Bindings<T>) -> bool {
+        self.add_record(fact, FactRecord::new(bindings.get_truth(), clause, bindings))
+    }
+
+    pub fn get<'a>(&'a mut self, fact: &Fact) -> Option<&'a T> {
+        self.extend_num_predicates(fact.predicate);
+        self.maps[fact.predicate].get(fact).map(|r| &r.truth)
+    }
+
+    pub fn set<'a>(&'a mut self, fact: Fact, truth: T) {
+        self.extend_num_predicates(fact.predicate);
+        let mut map = &mut self.maps[fact.predicate];
+        map.insert(fact, FactRecord::from_truth(truth));
+    }
+
+    #[cfg(test)]
+    pub fn eq_facts(&self, other: &Self) -> bool {
+        let mut facts = self.all_facts();
+        let mut other_facts = other.all_facts();
+        facts.sort();
+        other_facts.sort();
+        return facts == other_facts;
     }
 }

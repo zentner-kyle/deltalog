@@ -1,5 +1,6 @@
 use std::collections::hash_map;
 use std::collections::hash_map::{HashMap, Entry};
+use std::slice;
 use std::iter;
 
 use bindings::{Bindings};
@@ -33,6 +34,17 @@ impl<T> FactRecord<T> where T: TruthValue {
     fn join(&mut self, other: Self) {
         self.truth = T::either(&self.truth, &other.truth);
         self.bindings_set.extend(other.bindings_set);
+    }
+}
+
+pub struct CauseIter<'a, T: 'a> where T: TruthValue {
+    inner: slice::Iter<'a, (ClauseIndex, Bindings<T>)>,
+}
+
+impl<'a, T> Iterator for CauseIter<'a, T> where T: TruthValue {
+    type Item=(ClauseIndex, &'a Bindings<T>);
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(|&(clause_idx, ref bindings)| (clause_idx, bindings))
     }
 }
 
@@ -154,6 +166,16 @@ impl<T> FactTable<T> where T: TruthValue {
         self.extend_num_predicates(fact.predicate);
         self.maps[fact.predicate].get(fact).map(|r| &r.truth)
     }
+
+    pub fn get_causes<'a>(&'a mut self, fact: &Fact) -> Option<CauseIter<'a, T>> {
+        self.extend_num_predicates(fact.predicate);
+        self.maps[fact.predicate]
+            .get(fact)
+            .map(|r| CauseIter {
+                inner: r.bindings_set.iter()
+            })
+    }
+
 
     pub fn set<'a>(&'a mut self, fact: Fact, truth: T) {
         self.extend_num_predicates(fact.predicate);

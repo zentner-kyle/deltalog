@@ -9,6 +9,7 @@ mod parser;
 mod program;
 mod types;
 mod fact_table;
+mod optimize;
 pub mod truth_value;
 
 pub struct Context<T> where T: truth_value::TruthValue {
@@ -57,5 +58,16 @@ impl<T> Context<T> where T: truth_value::TruthValue {
         let mut output = String::new();
         write!(&mut output, "{}", self.program).unwrap();
         return output;
+    }
+
+    pub fn adapt_to(&mut self, target: &Self) {
+        let facts = self.facts.clone();
+        let facts2 = facts.clone();
+        let (clause_diff, _) = optimize::compute_adjustments(&self.program, facts, vec![(facts2, target.facts.clone())], 100);
+        self.program.clause_weights = self.program.clause_weights
+            .iter()
+            .zip(clause_diff)
+            .map(|(weight, diff)| T::dual_adjust(weight, &diff))
+            .collect();
     }
 }

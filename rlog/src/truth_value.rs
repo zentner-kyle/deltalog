@@ -4,6 +4,7 @@ use std::cmp::{Ordering};
 pub trait TruthValue : Clone + PartialEq + Eq + Debug + PartialOrd + Ord {
     type Dual: Clone + PartialEq + Debug + PartialOrd + Ord;
     fn default() -> Self;
+    fn zero() -> Self;
     fn dual_default() -> Self::Dual;
     fn parse(&str) -> Option<(Self, &str)>;
     fn parse_dual(&str) -> Option<(Self::Dual, &str)>;
@@ -15,6 +16,7 @@ pub trait TruthValue : Clone + PartialEq + Eq + Debug + PartialOrd + Ord {
     fn back_finalize(dual: &Self::Dual, a: &Self, err: &Self) -> Self;
     fn sub(a: &Self, b: &Self) -> Self;
     fn sum(a: &Self, b: &Self) -> Self;
+    fn dual_adjust(a: &Self::Dual, b: &Self) -> Self::Dual;
     fn as_datalog(&self) -> String;
     fn dual_as_datalog(dual: &Self::Dual) -> String;
 }
@@ -22,6 +24,7 @@ pub trait TruthValue : Clone + PartialEq + Eq + Debug + PartialOrd + Ord {
 impl TruthValue for () {
     type Dual = ();
     fn default() -> Self {}
+    fn zero() -> Self {}
     fn dual_default() -> Self::Dual {}
     fn either(_: &Self, _: &Self) -> Self {}
     fn back_either(_: &Self, _: &Self, _: &Self) -> (Self, Self) { ((), ()) }
@@ -31,6 +34,7 @@ impl TruthValue for () {
     fn back_finalize(_: &Self::Dual, _: &Self, _: &Self) -> Self {}
     fn sub(_: &Self, _: &Self) -> Self {}
     fn sum(_: &Self, _: &Self) -> Self {}
+    fn dual_adjust(_: &Self::Dual, _: &Self) -> Self::Dual {}
     fn parse(_: &str) -> Option<(Self, &str)> { None }
     fn parse_dual(_: &str) -> Option<(Self::Dual, &str)> { None }
     fn as_datalog(&self) -> String {
@@ -53,7 +57,7 @@ fn parse_float(src: &str) -> Option<(f64, &str)> {
 }
 
 #[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
-pub struct MaxFloat64(f64);
+pub struct MaxFloat64(pub f64);
 
 impl Eq for MaxFloat64 {}
 impl Ord for MaxFloat64 {
@@ -63,7 +67,7 @@ impl Ord for MaxFloat64 {
 }
 
 #[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
-pub struct MaxFloat64Dual(f64);
+pub struct MaxFloat64Dual(pub f64);
 
 impl Eq for MaxFloat64Dual {}
 impl Ord for MaxFloat64Dual {
@@ -77,6 +81,10 @@ impl TruthValue for MaxFloat64 {
 
     fn default() -> Self {
         MaxFloat64(1.0) 
+    }
+
+    fn zero() -> Self {
+        MaxFloat64(0.0)
     }
 
     fn dual_default() -> Self::Dual {
@@ -120,7 +128,11 @@ impl TruthValue for MaxFloat64 {
     }
 
     fn sum(a: &Self, b: &Self) -> Self {
-        MaxFloat64(a.0 + b.0)
+        MaxFloat64(f64::max(-1.0, f64::min(1.0, a.0 + b.0)))
+    }
+
+    fn dual_adjust(a: &Self::Dual, b: &Self) -> Self::Dual {
+        MaxFloat64Dual(f64::max(0.0, f64::min(1.0, a.0 + b.0)))
     }
 
 

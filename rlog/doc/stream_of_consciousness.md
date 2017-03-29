@@ -320,23 +320,23 @@ Say we would like to derive the following datalog program:
 Given the following samples:
 ```
 given
-  bar(0, 0).
-  bar(1, 1).
+  bar(0, 0),
+  bar(1, 1)
 implies
-  foo(0, 1).
-  foo(1, 0).
+  foo(0, 1),
+  foo(1, 0)
 given
-  bar(2, 2).
-  bar(1, 1).
+  bar(2, 2),
+  bar(1, 1)
 implies
-  foo(2, 1).
-  foo(1, 2).
+  foo(2, 1),
+  foo(1, 2)
 given
-  bar(0, 0).
-  bar(2, 2).
+  bar(0, 0),
+  bar(2, 2)
 implies
-  foo(0, 2).
-  foo(2, 0).
+  foo(0, 2),
+  foo(2, 0)
 ```
 
 Given the following training routine (the empty program):
@@ -377,4 +377,266 @@ variable, or add another literal referring to that variable.
 
 
 Alright, back to implementation mode. Let's start by implementing minimal
-backwards reasoning.
+backwards reasoning. That is to say, given an asserted fact and a program, find
+a set of sets of facts, such that any set of facts being true would result in
+the asserted fact being true.
+
+
+After implementing fuzzy logic, I'm fairly certain that  it is quite reasonable
+to optimize the weights separately from the topology of the program. Weight
+adjustments are basically a table mapping clauses to weight reductions which
+would minimize the output error. However, the mutation guides are basically a
+table which map each variable in some clauses to some record of how that
+variable is contributing to error. One specific idea would be a scalar, where
+larger vlues indicate the variable should be less constrained, and negative
+values indicate the variable should be more constrained.
+
+Algorithm:
+loop
+  compute results
+  compute weight adjustments
+  if weight adjustments < threshold:
+    break
+  remove low weight clauses
+  compute mutation guides
+  generate new clauses
+
+
+There's basically no way to ensure that this differential technique is correct
+in certain ways without constraining the either, both, and finalize functions to
+all be monotonic with respect to each other.
+
+Do the current min-max weights have this problem? It's kinda hard to tell. I
+believe they do if negative weights are allowed. The problem can be seen in the
+following example:
+
+confidence(1)
+B(0)
+C(0)
+
+weight(-1)
+A(X) :- B(X)
+B(X) :- C(X)
+
+What is the truth value of A(0) in this program?
+If We evaluate A(X) :- B(X) first, then we both the truth value of B(0) with
+the default to get the truth value 1 (= min(1, 1)). Then, we finalize 1 by
+multiplying by the weight, -1 to get -1. So we assign A(0) the truth value -1.
+Next, we evaluate B(X) :- C(X). Similarly, we take -1 * min(1, 1) = -1. Then,
+we set the truth value of B(0) to either(-1, -1) = max(-1, -1) = 1. We evaluate
+A(X) :- B(X) again, resulting in A(0) = -1 * max(-1, 
+
+
+Consider the equivalent program, with positive weights (but some negative
+confidence values):
+
+confidence(1)
+B(0)
+
+weight(1)
+A(X) :- B(X)
+B(X) :- C(X)
+
+confidence(-1)
+C(0)
+
+What is the truth value of A(0) in this program?
+If We evaluate A(X) :- B(X) first, then we both the truth value of B(0) with
+the default to get the truth value 1 (= min(1, 1)). Then, we finalize 1 by
+multiplying by the weight, 1 to get 1. So we assign A(0) the truth value 1.
+Next, we evaluate B(X) :- C(X). Similarly, we take 1 * min(1, -1) = -1. Then,
+we set the truth value of B(0) to either(-1, 1) = max(-1, 1) = 1.
+
+
+
+Perhaps we can make more progress on this problem by only considering trees? And passing values along the edges of trees?
+We're looking for cases where two different order of evaluations of clauses results in a fact having two different truth values.
+In the truth value of a fact is given by a reduction of either() of the
+finalize() of a reduction of both(). In other words the minimal expression
+which allows any particular operator to be reordered is (where a, b, c, and d are known truth values):
+either(default(), finalize(both(default(), a, b)), finalize(both(default(), c, d)))
+
+With the min-max truth value, that expression is equivalent to:
+max(1.0, x * min(1.0, a, b), y * min(1.0, c, d))
+where x and y are known weights
+
+Assuming x and y are positive:
+max(1.0, x * min(1.0, a, b), y * min(1.0, c, d)) = 
+max(1.0, min(x, xa, xb), min(y, yc, yd))
+
+a * min(max(b, c), min(max(d, e), max(f, g))) != a * min(
+
+What am I trying to prove here? Of course max and min are commutative and "idempotent."
+
+Exactly what kind of truth value are we computing here?
+If we imagine that the truth value represents the bias of a Bernoulli random
+variable, then taking the min of two truth values of two facts (a and b)
+represents the bias of a fact which is true iff (a & b) if a and b are
+maximally correlated. If a and b are independent, then the truth value should
+be the product of the truth values instead.
+
+The max of two truth values corresponds to the the truth value of (a | b), if a
+and b are maximally correlated. If a and b are independent, then the correct
+function to perform on the truth values (call them x and y) is 1 - (1 - x) * (1 - y).
+If the last function is associative:
+1 - (1 - (1 - (1 - x) * (1 - z))) * (1 - y) ?= 1 - (1 - x) * (1 - (1 - (1 - y) * (1 - z)))
+Left side:
+1 - (1 - (1 - (1 - x) * (1 - z))) * (1 - y)
+1 - (1 - (1 - (1 - x - z + xz))) * (1 - y)
+1 - (1 - (x + z - xz)) * (1 - y)
+1 - (1 - x - z + xz) * (1 - y)
+1 - ((1 - x - z + xz) - y(1 - x - z + xz))
+1 - (1 - x - z + xz - y + yx + yz - yxz)
+x + z - xz + y - yx - yz + yxz
+Right side:
+1 - (1 - (1 - (1 - y) * (1 - z))) * (1 - x)
+1 - (1 - (1 - (1 - y - z + yz))) * (1 - x)
+1 - (1 - (y + z - yz)) * (1 - x)
+1 - (1 - y - z + yz) * (1 - x)
+1 - ((1 - y - z + yz) - x(1 - y - z + yz))
+1 - (1 - y - z + yz - x + xy + xz - xyz)
+y + z - yz + x - xy - xz + xyz
+
+Those four functions are all associatiive and commutative. Unfortunately, the
+functions which correspond to minimal correlation are not idempotent. This
+should not be surprising, since in the trivial case of combining the truth
+value of a fact with itself, we should expect incorrect results if we assume a
+the truth value is not correlated with itself.
+
+In most Bayseian learning systems, the asssumption used to improve tractability
+is that things are independent. In this case, we instead assume "maximum
+correlation/dependence". Does that still work well?
+
+
+We would like proof that weight optimization will lead to the "selection" of
+correct rules from our program, given that the correct rules are present in our
+program. By selection, I mean that we would like the weights for those rules to
+become 1.0, or at least distinguishably higher than every other weight in the
+program. If we continuously renormalize the weights, then all we actually need
+to prove is that all wrong rules get eliminated. It seems obvious that this
+should happen, so I guess I'll stop worrying about it.
+
+
+One thing that's annoying is that we can't easily compute the fixed point of
+the truth values of a program. For the min-max truth value, we can at least
+guarantee that calling `evaluate_bottom_up` enough times will result in
+convergence. However, error propagation is kinda a mess. And even for normal
+evaluation, the number of iterations to reach convergence can be the length of
+the longest loop in the fact graph (which can potentially be the entire
+database). In comparison, loop detection in a list using the pointer following
+algorithm guarantees detection in at most two passes through the loop.
+
+Yeah, the update conditions upon finding a "wave collision" devolve into
+keeping a tree copied from the part of the fact graph that lead to the current
+fact. Instead, it should be cheaper (and more useful) to improve the dirtyness
+tracking in the bottom up algorithm.
+
+But what about error propagation? That can still diverge. Even if we
+arbitrarily restrict the range of adjustments (to say 0.0 to 1.0), the values
+can still oscillate if we don't restrict the weights to positive values. So
+maybe do that?
+
+
+
+As for error propagation:
+We need to avoid looping infinitely. It would be nice if in doing so we
+actually compute the correct error, instead of ignoring loops.  The simplest
+way to avoid looping is to keep a set of already visited facts.  When a fact is
+visited, do not add it to the frontier.  This technique completely fails for
+diamonds in the fact graph, which is basically unacceptable.  Conceptually, the
+best idea I have for how to make this actually work is the as follows.  For
+every entry in the frontier, keep a mapping from facts to the weight that fact
+had when it was visited on the way to adding this entry to the frontier, and
+also the number of times that fact has been visited along this pass. When a
+fact is first found in this mapping, compute a "loop closure adjustment, and
+store it in a separate adjustment table. However, still propagate the error as
+normal. The second time the fact is encountered from its own entailer table, do
+not propagate it.  After normal propagation, use the loop closure adjustment
+table to determine how weights diverge. Asjust them to the appropriate
+divergent values, then propagate the error resulting from divergent weights.
+
+Another perspective is that loops in the fact graph are essentially anomalous,
+and not worth computing properly. In that case, the first time a fact is
+encountered in its own entailer table, we should just drop it from propagation.
+
+It works! In a minimal sense. In retrospect, I need to actually do the math on
+how to optimize the network.
+
+Damn, remember how to do back propagation correctly from first principles is a
+pain.
+
+We want to compute the derivative of the output w.r.t. the weights.
+
+```
+u[i, j] = ?
+v[i, j] = both v[i - 1, j] u[i, j]
+w[i, j] = finalize v[i, j]
+x[i, j] = either x[i, j - 1] w[i, j]
+
+u[i, j] = ?
+v[i, j] = min v[i - 1, j] u[i, j]
+w[i, j] = q * v[i, j]
+x[i, j] = max x[i, j - 1] w[i, j]
+
+du[i, j] = ?
+dv[i, j] = argmin [v[i - 1, j] u[i, j]] [dv[i - 1, j], du[i, j]]
+dw[i, j] = q * dv[i, j] + dq * v[i, j]
+dx[i, j] = argmax [x[i, j - 1] w[i, j]] [dx[i, j - 1], dw[i, j]]
+
+gx[i, j] = ?
+gw[i, j] = argmax [x[i, j - 1], w[i, j]] [0, gx[i, j]]
+gx[i, j - 1] += argmax [x[i, j - 1], w[i, j]] [gx[i, j], 0]
+gv[i, j] += q * gw[i, j]
+gq += v[i, j] * gw[i, j]
+gu[i, j] = argmin [v[i - 1, j], u[i, j]] [0, gv[i, j]]
+gv[i - 1, j] += argmin [v[i - 1, j], u[i, j]] [gv[i, j], 0]
+
+gx[i, j] = ?
+gx[i, j - 1], gw[i, j] = back_either x[i, j - 1], w[i, j], gx[i, j]
+gv[i, j], gq += back_finalize q, gw[i, j]
+ = argmin [v[i - 1, j], u[i, j]] [0, gv[i, j]]
+gv[i - 1, j], gu[i, j] += back_either v[i - 1, j], u[i, j], gv[i, j]
+
+e = (1/2) * (y - x) ** 2
+d e = y - x * (d y - d x) ???
+e = (1/2) * (y**2 - 2 * y * x + x**2)
+d e = (1/2) * (2 * y - 2 * (y * d x + d y * x) + 2 * x)
+d e = y * d x + d y * x
+gy = x * ge
+gx = y * -ge
+```
+
+Intuition check:
+
+(Minimizing error of a linear function.)
+```
+e = (1/2) * (w * x - y) ** 2
+
+w = ?
+x = ?
+y = ?
+a = w * x
+b = a - y
+d = b * b
+e = d / 2
+
+dw = ?
+dx = ?
+dy = ?
+da = w * dx + dw * x
+db = da - dy
+dd = 2b * db
+de = dd / 2
+
+de = (2(w * x - y) * (w * dx + dw * x - dy)) / 2
+de = (w * x - y) * (w * dx + dw * x - dy)
+de/dw = (w * x - y) * x
+
+ge = ?
+gd = ge / 2
+gb = 2 * gd
+ga = gb
+gy = -gb
+gx = w * ga
+gw = x * ga
+```

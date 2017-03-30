@@ -52,8 +52,8 @@ mod tests {
     #[test]
     fn run_single_derivation() {
         let mut prg = Program::new();
-        // B(X) :- A(X)
-        // Where A is predicate 0, B is predicate 1, and X is variable 0.
+        // b(X) :- a(X)
+        // Where a is predicate 0, b is predicate 1, and X is variable 0.
         prg.clauses.push(Clause::new_from_vec(
             Literal::new_from_vec(1, vec![
                 Term::Variable(0)
@@ -66,12 +66,11 @@ mod tests {
         );
         prg.clause_weights.push(());
         let mut facts = FactTable::<()>::new();
-        // A(2)
-        facts.add_fact(Fact::new_from_vec(0, vec![
-            2
-        ]), ());
+        // a(2)
+        let starting_fact = Fact::new_from_vec(0, vec![2]);
+        facts.add_fact(starting_fact.clone(), ());
         evaluate_bottom_up(&mut facts, &prg);
-        // We expect B(2) to be added to the FactTable.
+        // We expect b(2) to be added to the FactTable.
         let mut expected = FactTable::new();
         expected.add_fact(Fact::new_from_vec(0, vec![
             2
@@ -80,6 +79,7 @@ mod tests {
             2
         ]), ());
         assert!(expected.eq_facts(&facts));
+        assert!(facts.get_causes(&starting_fact).unwrap().next().is_none());
     }
 
     #[test]
@@ -111,12 +111,11 @@ mod tests {
         );
         prg.clause_weights.push(());
         let mut facts = FactTable::<()>::new();
-        // C(2)
-        facts.add_fact(Fact::new_from_vec(2, vec![
-            2
-        ]), ());
+        // c(2)
+        let starting_fact = Fact::new_from_vec(2, vec![2]);
+        facts.add_fact(starting_fact.clone(), ());
         evaluate_bottom_up(&mut facts, &prg);
-        // We expect A(2) to be added to the FactTable.
+        // We expect a(2) to be added to the FactTable.
         let mut expected = FactTable::new();
         expected.add_fact(Fact::new_from_vec(0, vec![
             2
@@ -127,7 +126,7 @@ mod tests {
         expected.add_fact(Fact::new_from_vec(2, vec![
             2
         ]), ());
-        println!("{:?}", facts); 
         assert!(expected.eq_facts(&facts));
+        assert!(facts.get_causes(&starting_fact).unwrap().next().is_none());
     }
 }

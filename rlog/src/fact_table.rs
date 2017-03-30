@@ -17,7 +17,10 @@ struct FactRecord<T> where T: TruthValue {
 impl<T> FactRecord<T> where T: TruthValue {
     fn new(truth: T, clause_idx: usize, bindings: Bindings<T>) -> Self {
         let mut bind_set = Vec::new();
-        bind_set.push((clause_idx, bindings));
+        let to_insert = (clause_idx, bindings);
+        if !bind_set.contains(&to_insert) {
+            bind_set.push(to_insert);
+        }
         FactRecord {
             bindings_set: bind_set,
             truth: truth,
@@ -33,7 +36,11 @@ impl<T> FactRecord<T> where T: TruthValue {
 
     fn join(&mut self, other: Self) {
         self.truth = T::either(&self.truth, &other.truth);
-        self.bindings_set.extend(other.bindings_set);
+        for binds in other.bindings_set {
+            if !self.bindings_set.contains(&binds) {
+                self.bindings_set.push(binds);
+            }
+        }
     }
 }
 

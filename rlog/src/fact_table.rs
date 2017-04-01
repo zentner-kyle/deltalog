@@ -166,16 +166,25 @@ impl<T> FactTable<T> where T: TruthValue {
     }
 
     pub fn add_match(&mut self, fact: Fact, clause: ClauseIndex, bindings: Bindings<T>) -> bool {
-        self.add_record(fact, FactRecord::new(bindings.get_truth(), clause, bindings))
+        self.add_record(fact, FactRecord::new(bindings.truth(), clause, bindings))
     }
 
     pub fn get<'a>(&'a mut self, fact: &Fact) -> Option<&'a T> {
         self.extend_num_predicates(fact.predicate);
+        self.get_unmut(fact)
+    }
+
+    pub fn get_unmut<'a>(&'a self, fact: &Fact) -> Option<&'a T> {
         self.maps[fact.predicate].get(fact).map(|r| &r.truth)
     }
 
+    #[allow(dead_code)]
     pub fn get_causes<'a>(&'a mut self, fact: &Fact) -> Option<CauseIter<'a, T>> {
         self.extend_num_predicates(fact.predicate);
+        self.get_causes_unmut(fact)
+    }
+
+    pub fn get_causes_unmut<'a>(&'a self, fact: &Fact) -> Option<CauseIter<'a, T>> {
         self.maps[fact.predicate]
             .get(fact)
             .map(|r| CauseIter {

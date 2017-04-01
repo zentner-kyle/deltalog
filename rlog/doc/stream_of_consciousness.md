@@ -593,9 +593,10 @@ gv[i - 1, j] += argmin [v[i - 1, j], u[i, j]] [gv[i, j], 0]
 
 gx[i, j] = ?
 gx[i, j - 1], gw[i, j] = back_either x[i, j - 1], w[i, j], gx[i, j]
-gv[i, j], gq += back_finalize q, gw[i, j]
+gq, gv[i, j] += back_finalize q, v[i, j], gw[i, j]
+gv[i - 1, j], gu[i, j] += back_both v[i - 1, j], u[i, j], gv[i, j]
+
  = argmin [v[i - 1, j], u[i, j]] [0, gv[i, j]]
-gv[i - 1, j], gu[i, j] += back_either v[i - 1, j], u[i, j], gv[i, j]
 
 e = (1/2) * (y - x) ** 2
 d e = y - x * (d y - d x) ???

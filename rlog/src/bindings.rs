@@ -35,8 +35,12 @@ impl<T> Bindings<T> where T: TruthValue {
         }
     }
     
-    pub fn get_truth(&self) -> T {
+    pub fn truth(&self) -> T {
         T::finalize(&self.weight, &self.truth)
+    }
+
+    pub fn unfinalized_truth(&self) -> &T {
+        &self.truth
     }
 
     pub fn refine(&self, literal: &Literal, fact: &Fact, truth: &T) -> Option<Self> {

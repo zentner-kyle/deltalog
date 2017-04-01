@@ -6,6 +6,7 @@ pub trait TruthValue : Clone + PartialEq + Eq + Debug + PartialOrd + Ord {
     fn default() -> Self;
     fn zero() -> Self;
     fn dual_default() -> Self::Dual;
+    fn dual_zero() -> Self::Dual;
     fn parse(&str) -> Option<(Self, &str)>;
     fn parse_dual(&str) -> Option<(Self::Dual, &str)>;
     fn either(a: &Self, b: &Self) -> Self;
@@ -13,10 +14,10 @@ pub trait TruthValue : Clone + PartialEq + Eq + Debug + PartialOrd + Ord {
     fn both(a: &Self, b: &Self) -> Self;
     fn back_both(a: &Self, b: &Self, err: &Self) -> (Self, Self);
     fn finalize(dual: &Self::Dual, a: &Self) -> Self;
-    fn back_finalize(dual: &Self::Dual, a: &Self, err: &Self) -> Self;
+    fn back_finalize(dual: &Self::Dual, a: &Self, err: &Self) -> (Self::Dual, Self);
     fn sub(a: &Self, b: &Self) -> Self;
     fn sum(a: &Self, b: &Self) -> Self;
-    fn dual_adjust(a: &Self::Dual, b: &Self) -> Self::Dual;
+    fn dual_sum(a: &Self::Dual, b: &Self::Dual) -> Self::Dual;
     fn as_datalog(&self) -> String;
     fn dual_as_datalog(dual: &Self::Dual) -> String;
 }
@@ -26,15 +27,16 @@ impl TruthValue for () {
     fn default() -> Self {}
     fn zero() -> Self {}
     fn dual_default() -> Self::Dual {}
+    fn dual_zero() -> Self::Dual {}
     fn either(_: &Self, _: &Self) -> Self {}
     fn back_either(_: &Self, _: &Self, _: &Self) -> (Self, Self) { ((), ()) }
     fn both(_: &Self, _: &Self) -> Self {}
     fn back_both(_: &Self, _: &Self, _: &Self) -> (Self, Self) { ((), ()) }
     fn finalize(_: &Self::Dual, _: &Self) -> Self {}
-    fn back_finalize(_: &Self::Dual, _: &Self, _: &Self) -> Self {}
+    fn back_finalize(_: &Self::Dual, _: &Self, _: &Self) -> (Self::Dual, Self) { ((), ()) }
     fn sub(_: &Self, _: &Self) -> Self {}
     fn sum(_: &Self, _: &Self) -> Self {}
-    fn dual_adjust(_: &Self::Dual, _: &Self) -> Self::Dual {}
+    fn dual_sum(_: &Self::Dual, _: &Self::Dual) -> Self::Dual {}
     fn parse(_: &str) -> Option<(Self, &str)> { None }
     fn parse_dual(_: &str) -> Option<(Self::Dual, &str)> { None }
     fn as_datalog(&self) -> String {
@@ -91,6 +93,10 @@ impl TruthValue for MaxFloat64 {
         MaxFloat64Dual(1.0) 
     }
 
+    fn dual_zero() -> Self::Dual {
+        MaxFloat64Dual(0.0) 
+    }
+
     fn either(a: &Self, b: &Self) -> Self {
         MaxFloat64(f64::max(a.0, b.0))
     }
@@ -119,8 +125,8 @@ impl TruthValue for MaxFloat64 {
         MaxFloat64(dual.0 * a.0)
     }
 
-    fn back_finalize(dual: &Self::Dual, _a: &Self, err: &Self) -> Self {
-        MaxFloat64(err.0 / dual.0)
+    fn back_finalize(dual: &Self::Dual, a: &Self, err: &Self) -> (Self::Dual, Self) {
+        (MaxFloat64Dual(err.0 * a.0), MaxFloat64(err.0 * dual.0))
     }
 
     fn sub(a: &Self, b: &Self) -> Self {
@@ -128,11 +134,12 @@ impl TruthValue for MaxFloat64 {
     }
 
     fn sum(a: &Self, b: &Self) -> Self {
-        MaxFloat64(f64::max(-1.0, f64::min(1.0, a.0 + b.0)))
+        //MaxFloat64(f64::max(-1.0, f64::min(1.0, a.0 + b.0)))
+        MaxFloat64(a.0 + b.0)
     }
 
-    fn dual_adjust(a: &Self::Dual, b: &Self) -> Self::Dual {
-        MaxFloat64Dual(f64::max(0.0, f64::min(1.0, a.0 + b.0)))
+    fn dual_sum(a: &Self::Dual, b: &Self::Dual) -> Self::Dual {
+        MaxFloat64Dual(a.0 + b.0)
     }
 
 

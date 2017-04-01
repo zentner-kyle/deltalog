@@ -67,7 +67,7 @@ impl<T> Context<T> where T: truth_value::TruthValue {
         self.program.clause_weights = self.program.clause_weights
             .iter()
             .zip(clause_diff)
-            .map(|(weight, diff)| T::dual_adjust(weight, &diff))
+            .map(|(weight, diff)| T::dual_sum(weight, &diff))
             .collect();
     }
 }

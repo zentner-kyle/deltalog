@@ -63,7 +63,8 @@ impl<T> Context<T> where T: truth_value::TruthValue {
     pub fn adapt_to(&mut self, target: &Self) {
         let facts = self.facts.clone();
         let facts2 = facts.clone();
-        let (clause_diff, _) = optimize::compute_adjustments(&self.program, facts, vec![(facts2, target.facts.clone())], 100);
+        let res = optimize::compute_adjustments(&self.program, facts, vec![(facts2, target.facts.clone())], 100);
+        let clause_diff = res.clause_adjustments;
         self.program.clause_weights = self.program.clause_weights
             .iter()
             .zip(clause_diff)

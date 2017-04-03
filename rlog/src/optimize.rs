@@ -36,14 +36,15 @@ use program::{Program};
 /// v[i, j] is T::both(v_last, facts.get(&binds.solidify(clause.body[i])))
 ///            (both v[i - 1, j], u[i - 1])
 /// sum gq is clause_adjustments
-/// gu is fact_adjustments
+/// gu is apparent_fact_adjustments
 /// gz is error
 #[allow(unused_mut)]
 pub fn gradient_step<T>(program: &Program<T>,
                         mut facts: FactTable<T>,
                         mut expected: FactTable<T>,
                         clause_adjustments: &mut Vec<T::Dual>,
-                        fact_adjustments: &mut FactTable<T>,
+                        apparent_fact_adjustments: &mut FactTable<T>,
+                        latent_fact_adjustments: &mut FactTable<T>,
                         max_iters: usize) where T: TruthValue {
     // Convert expected truth values into initial adjoints.
     let mut frontier: Vec<_> = expected
@@ -64,7 +65,7 @@ pub fn gradient_step<T>(program: &Program<T>,
         }
         if let Some(causes) = facts.get_causes_unmut(&fact) {
             let mut x_last = z;
-            let mut gx_last = gz;
+            let mut gx_last = gz.clone();
             for (clause_idx, binds) in causes {
                 let q = &program.clause_weights[clause_idx];
                 let w = binds.truth();
@@ -93,29 +94,49 @@ pub fn gradient_step<T>(program: &Program<T>,
                     gv_last = gv;
                 }
             }
-        } else {
-            let old_adjustment = fact_adjustments.get(&fact).cloned().unwrap_or_else(|| T::zero());
+            let old_adjustment = apparent_fact_adjustments.get(&fact).cloned().unwrap_or_else(|| T::zero());
             let new_adjustment = T::sum(&gz, &old_adjustment);
-            fact_adjustments.set(fact, new_adjustment);
+            apparent_fact_adjustments.set(fact, new_adjustment);
+        } else {
+            let old_adjustment = latent_fact_adjustments.get(&fact).cloned().unwrap_or_else(|| T::zero());
+            let new_adjustment = T::sum(&gz, &old_adjustment);
+            latent_fact_adjustments.set(fact, new_adjustment);
         }
     }
+}
+
+pub struct AdjustmentResult<T> where T: TruthValue {
+    pub clause_adjustments: Vec<T::Dual>,
+    pub apparent_fact_adjustments: FactTable<T>,
+    pub latent_fact_adjustments: FactTable<T>,
 }
 
 
 pub fn compute_adjustments<T>(program: &Program<T>,
                               mut facts: FactTable<T>,
                               samples: Vec<(FactTable<T>, FactTable<T>)>,
-                              max_iters: usize) -> (Vec<T::Dual>, FactTable<T>) where T: TruthValue {
+                              max_iters: usize) -> AdjustmentResult<T> where T: TruthValue {
     let mut clause_adjustments = vec![T::dual_zero(); program.clauses.len()];
-    let mut fact_adjustments: FactTable<T> = FactTable::new();
+    let mut latent_fact_adjustments: FactTable<T> = FactTable::new();
+    let mut apparent_fact_adjustments: FactTable<T> = FactTable::new();
     evaluate_bottom_up(&mut facts, program);
     for (input, expected) in samples {
         let mut result_from_sample = facts.clone();
         result_from_sample.merge_new_generation(input);
         evaluate_bottom_up(&mut result_from_sample, program);
-        gradient_step(program, result_from_sample, expected, &mut clause_adjustments, &mut fact_adjustments, max_iters);
+        gradient_step(program,
+                      result_from_sample,
+                      expected,
+                      &mut clause_adjustments,
+                      &mut apparent_fact_adjustments,
+                      &mut latent_fact_adjustments,
+                      max_iters);
     }
-    return (clause_adjustments, fact_adjustments);
+    return AdjustmentResult {
+        clause_adjustments: clause_adjustments,
+        apparent_fact_adjustments: apparent_fact_adjustments,
+        latent_fact_adjustments: latent_fact_adjustments,
+    };
 }
 
 #[cfg(test)]
@@ -151,7 +172,8 @@ mod tests {
         // We expect b(2) to be added to the FactTable.
         let mut expected = FactTable::<MaxFloat64>::new();
         expected.add_fact(Fact::new_from_vec(1, vec![2]), MaxFloat64(1.0));
-        let (clause_diff, mut fact_diff) = compute_adjustments(&prg, facts.clone(), vec![(facts.clone(), expected)], 100);
+        let res = compute_adjustments(&prg, facts.clone(), vec![(facts.clone(), expected)], 100);
+        let (clause_diff, mut fact_diff) = (res.clause_adjustments, res.latent_fact_adjustments);
         assert!(clause_diff[0].0 > 0.0);
         assert_eq!(clause_diff[0], MaxFloat64Dual(1.0));
         // The following isn't a very important property.
@@ -194,7 +216,8 @@ mod tests {
         // We expect a(2) to be added to the FactTable.
         let mut expected = FactTable::<MaxFloat64>::new();
         expected.add_fact(Fact::new_from_vec(0, vec![2]), MaxFloat64(1.0));
-        let (clause_diff, mut fact_diff) = compute_adjustments(&prg, facts.clone(), vec![(facts.clone(), expected)], 100);
+        let res = compute_adjustments(&prg, facts.clone(), vec![(facts.clone(), expected)], 100);
+        let (clause_diff, mut fact_diff) = (res.clause_adjustments, res.latent_fact_adjustments);
         assert!(clause_diff[0].0 > 0.0);
         assert!(clause_diff[1].0 > 0.0);
         assert_eq!(fact_diff.get(&input_fact), None);

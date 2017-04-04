@@ -6,7 +6,7 @@ use fact_table::{FactTable};
 use std::str::{FromStr};
 use truth_value::{TruthValue};
 
-use types::{Term, Literal, Clause};
+use types::{Term, Literal, Clause, Constant, Fact};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Error<'a> {
@@ -184,6 +184,64 @@ fn literal<'a, 'b>(src: &'a str, var_names: &'b mut NameTable, predicate_names: 
     return Ok((Literal::new_from_vec(predicate, ts), rest));
 }
 
+fn fact_terms<'a, 'b>(src: &'a str) -> Result<'a, Vec<Constant>> {
+    let mut rest = src;
+    let mut result = Vec::new();
+    loop {
+        rest = skip_whitespace(rest);
+        if let Ok((number, r)) = unsigned_decimal_integer(rest) {
+            debug!("found decimal integer");
+            rest = r;
+            result.push(number);
+        } else {
+            return err_msg("Unexpected character in fact argument list", rest);
+        }
+        rest = skip_whitespace(rest);
+        if let Ok((_, r)) = character(rest, ',') {
+            rest = r;
+        } else {
+            return Ok((result, rest));
+        }
+    }
+}
+
+
+fn fact<'a, 'b>(src: &'a str, predicate_names: &'b mut NameTable) -> Result<'a, Fact> {
+    let mut rest = src;
+    rest = skip_whitespace(rest);
+    let (predicate_name, r) = lowercase_identifier(rest)?;
+    rest = r;
+    rest = skip_whitespace(rest);
+    rest = character(rest, '(')?.1;
+    rest = skip_whitespace(rest);
+    let (ts, r) = fact_terms(rest)?;
+    rest = r;
+    rest = skip_whitespace(rest);
+    rest = character(rest, ')')?.1;
+    let predicate = predicate_names.get(predicate_name);
+    return Ok((Fact::new_from_vec(predicate, ts), rest));
+}
+
+fn fact_list<'a, 'b, T>(src: &'a str, predicate_names: &'b mut NameTable) -> Result<'a, FactTable<T>> where T: TruthValue {
+    let mut rest = src;
+    let mut results = FactTable::new();
+    loop {
+        rest = skip_whitespace(rest);
+        if let Ok((fact, r)) = fact(rest, predicate_names) {
+            rest = r;
+            results.set(fact, T::default());
+        } else {
+            return err_msg("Unexpected character in fact list", rest);
+        }
+        rest = skip_whitespace(rest);
+        if let Ok((_, r)) = character(rest, ',') {
+            rest = r;
+        } else {
+            return Ok((results, rest));
+        }
+    }
+}
+
 pub fn weight<T>(source: &str) -> Result<T::Dual> where T: TruthValue {
     let mut rest = source;
     rest = prefix(rest, "weight")?.1;
@@ -216,20 +274,42 @@ pub fn confidence<T>(source: &str) -> Result<T> where T: TruthValue {
     }
 }
 
+pub fn sample<'a, 'b, T>(source: &'a str, predicate_names: &'b mut NameTable) -> Result<'a, (FactTable<T>, FactTable<T>)> where T: TruthValue {
+    let mut rest = source;
+    rest = prefix(rest, "sample")?.1;
+    rest = skip_whitespace(rest);
+    let (input, r) = fact_list(rest, predicate_names)?;
+    rest = r;
+    rest = skip_whitespace(rest);
+    rest = prefix(rest, "output")?.1;
+    rest = skip_whitespace(rest);
+    let (output, r) = fact_list(rest, predicate_names)?;
+    rest = r;
+    rest = skip_whitespace(rest);
+    rest = character(rest, '.')?.1;
+    return Ok(((input, output), rest));
+}
 
-pub fn program<T>(source: &str) -> Result<(FactTable<T>, Program<T>)> where T: TruthValue {
+
+pub fn program<T>(source: &str) -> Result<(FactTable<T>, Program<T>, Vec<(FactTable<T>, FactTable<T>)>)> where T: TruthValue {
     let mut rest = source;
     let mut facts = FactTable::new();
     let mut program = Program::new();
     let mut current_weight = T::dual_default();
     let mut current_confidence = T::default();
+    let mut samples: Vec<(FactTable<T>, FactTable<T>)> = Vec::new();
     loop {
         rest = skip_whitespace(rest);
         if rest.len() == 0 {
             facts.extend_num_predicates(program.num_predicates());
-            return Ok(((facts, program), rest));
+            return Ok(((facts, program, samples), rest));
         }
         let start_of_clause = rest;
+        if let Ok((sample, r)) = sample(rest, &mut program.predicate_names) {
+            rest = r;
+            samples.push(sample);
+            continue;
+        }
         if let Ok((weight, r)) = weight::<T>(rest) {
             rest = r;
             rest = skip_whitespace(rest);

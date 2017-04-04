@@ -18,6 +18,7 @@ pub trait TruthValue : Clone + PartialEq + Eq + Debug + PartialOrd + Ord {
     fn sub(a: &Self, b: &Self) -> Self;
     fn sum(a: &Self, b: &Self) -> Self;
     fn dual_sum(a: &Self::Dual, b: &Self::Dual) -> Self::Dual;
+    fn dual_adjust(dual: &mut Self::Dual, adjust: &Self::Dual, rate: f64);
     fn as_datalog(&self) -> String;
     fn dual_as_datalog(dual: &Self::Dual) -> String;
 }
@@ -37,6 +38,7 @@ impl TruthValue for () {
     fn sub(_: &Self, _: &Self) -> Self {}
     fn sum(_: &Self, _: &Self) -> Self {}
     fn dual_sum(_: &Self::Dual, _: &Self::Dual) -> Self::Dual {}
+    fn dual_adjust(_: &mut Self::Dual, _: &Self::Dual, _: f64) {}
     fn parse(_: &str) -> Option<(Self, &str)> { None }
     fn parse_dual(_: &str) -> Option<(Self::Dual, &str)> { None }
     fn as_datalog(&self) -> String {
@@ -140,6 +142,10 @@ impl TruthValue for MaxFloat64 {
 
     fn dual_sum(a: &Self::Dual, b: &Self::Dual) -> Self::Dual {
         MaxFloat64Dual(a.0 + b.0)
+    }
+
+    fn dual_adjust(dual: &mut Self::Dual, adjust: &Self::Dual, rate: f64) {
+        dual.0 = f64::max(0.0, f64::min(1.0, dual.0 + rate * adjust.0));
     }
 
 

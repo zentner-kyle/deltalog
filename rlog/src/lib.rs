@@ -12,9 +12,12 @@ mod fact_table;
 mod optimize;
 pub mod truth_value;
 
+use fact_table::{FactTable};
+
 pub struct Context<T> where T: truth_value::TruthValue {
     facts: fact_table::FactTable<T>,
     program: program::Program<T>,
+    samples: Vec<(FactTable<T>, FactTable<T>)>,
 }
 
 #[derive(Debug)]
@@ -29,12 +32,15 @@ pub enum Error<'a> {
 
 pub type Result<'a, T> = std::result::Result<T, Error<'a>>;
 
+const STEP_ITERATIONS: usize = 1000000000usize;
+
 impl<T> Context<T> where T: truth_value::TruthValue {
     pub fn new_from_source(source: &str) -> Result<Self> {
         parser::program(source)
-            .map(|((facts, program), _)| Context {
+            .map(|((facts, program, samples), _)| Context {
                 facts: facts,
                 program: program,
+                samples: samples,
             })
             .map_err(|e| {
                 match e {
@@ -60,15 +66,12 @@ impl<T> Context<T> where T: truth_value::TruthValue {
         return output;
     }
 
-    pub fn adapt_to(&mut self, target: &Self) {
-        let facts = self.facts.clone();
-        let facts2 = facts.clone();
-        let res = optimize::compute_adjustments(&self.program, facts, vec![(facts2, target.facts.clone())], 100);
-        let clause_diff = res.clause_adjustments;
-        self.program.clause_weights = self.program.clause_weights
-            .iter()
-            .zip(clause_diff)
-            .map(|(weight, diff)| T::dual_sum(weight, &diff))
-            .collect();
+    pub fn optimize(&mut self, learning_rate: f64, iterations: usize) {
+        for _ in 0..iterations {
+            let res = optimize::compute_adjustments(&self.program, &self.facts, &self.samples, STEP_ITERATIONS);
+            for (clause_idx, adjustment) in res.clause_adjustments.iter().enumerate() {
+                T::dual_adjust(&mut self.program.clause_weights[clause_idx], adjustment, learning_rate);
+            }
+        }
     }
 }

@@ -41,7 +41,7 @@ use program::{Program};
 #[allow(unused_mut)]
 pub fn gradient_step<T>(program: &Program<T>,
                         mut facts: FactTable<T>,
-                        mut expected: FactTable<T>,
+                        expected: &FactTable<T>,
                         clause_adjustments: &mut Vec<T::Dual>,
                         apparent_fact_adjustments: &mut FactTable<T>,
                         latent_fact_adjustments: &mut FactTable<T>,
@@ -113,16 +113,17 @@ pub struct AdjustmentResult<T> where T: TruthValue {
 
 
 pub fn compute_adjustments<T>(program: &Program<T>,
-                              mut facts: FactTable<T>,
-                              samples: Vec<(FactTable<T>, FactTable<T>)>,
+                              facts: &FactTable<T>,
+                              samples: &Vec<(FactTable<T>, FactTable<T>)>,
                               max_iters: usize) -> AdjustmentResult<T> where T: TruthValue {
     let mut clause_adjustments = vec![T::dual_zero(); program.clauses.len()];
     let mut latent_fact_adjustments: FactTable<T> = FactTable::new();
     let mut apparent_fact_adjustments: FactTable<T> = FactTable::new();
+    let mut facts = facts.clone();
     evaluate_bottom_up(&mut facts, program);
-    for (input, expected) in samples {
+    for &(ref input, ref expected) in samples {
         let mut result_from_sample = facts.clone();
-        result_from_sample.merge_new_generation(input);
+        result_from_sample.merge_new_generation(input.clone());
         evaluate_bottom_up(&mut result_from_sample, program);
         gradient_step(program,
                       result_from_sample,
@@ -172,7 +173,7 @@ mod tests {
         // We expect b(2) to be added to the FactTable.
         let mut expected = FactTable::<MaxFloat64>::new();
         expected.add_fact(Fact::new_from_vec(1, vec![2]), MaxFloat64(1.0));
-        let res = compute_adjustments(&prg, facts.clone(), vec![(facts.clone(), expected)], 100);
+        let res = compute_adjustments(&prg, &facts, &vec![(facts.clone(), expected)], 100);
         let (clause_diff, mut fact_diff) = (res.clause_adjustments, res.latent_fact_adjustments);
         assert!(clause_diff[0].0 > 0.0);
         assert_eq!(clause_diff[0], MaxFloat64Dual(1.0));
@@ -216,7 +217,7 @@ mod tests {
         // We expect a(2) to be added to the FactTable.
         let mut expected = FactTable::<MaxFloat64>::new();
         expected.add_fact(Fact::new_from_vec(0, vec![2]), MaxFloat64(1.0));
-        let res = compute_adjustments(&prg, facts.clone(), vec![(facts.clone(), expected)], 100);
+        let res = compute_adjustments(&prg, &facts, &vec![(facts.clone(), expected)], 100);
         let (clause_diff, mut fact_diff) = (res.clause_adjustments, res.latent_fact_adjustments);
         assert!(clause_diff[0].0 > 0.0);
         assert!(clause_diff[1].0 > 0.0);

@@ -38,6 +38,10 @@ impl NameTable {
         }
         result
     }
+
+    pub fn len(&self) -> usize {
+        return self.next_index;
+    }
 }
 
 #[cfg(test)]

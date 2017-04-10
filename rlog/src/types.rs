@@ -6,6 +6,7 @@ pub type Predicate = usize;
 pub type Constant = usize;
 pub type Variable = usize;
 pub type ClauseIndex = usize;
+pub type TermIndex = usize;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Copy)]
 pub enum Term {
@@ -41,6 +42,7 @@ impl Clause {
     }
 
     pub fn is_valid(&self) -> bool {
+        // TODO(zentner): num_variables() assumes validity!
         for var in 0..self.num_variables() {
             if !self.contains_variable_in_body(var) {
                 return false;

@@ -1,7 +1,7 @@
 use std::collections::hash_map::{HashMap};
 use std::fmt;
 
-use types::{Clause, ClauseIndex};
+use types::{Clause, ClauseIndex, Predicate};
 use name_table::{NameTable};
 use truth_value::{TruthValue};
 
@@ -11,6 +11,7 @@ pub struct Program<T> where T: TruthValue {
     pub clause_weights: Vec<T::Dual>,
     pub predicate_names: NameTable,
     pub clause_variable_names: HashMap<ClauseIndex, NameTable>,
+    pub predicate_num_terms: HashMap<Predicate, usize>,
 }
 
 impl<T> Program<T> where T: TruthValue {
@@ -20,6 +21,7 @@ impl<T> Program<T> where T: TruthValue {
             clause_weights: Vec::new(),
             predicate_names: NameTable::new(),
             clause_variable_names: HashMap::new(),
+            predicate_num_terms: HashMap::new(),
         }
     }
 

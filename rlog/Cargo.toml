@@ -5,4 +5,5 @@ authors = ["Kyle Zentner <zentner.kyle@gmail.com>"]
 
 [dependencies]
 log = "0.3"
+rand = "0.3"
 unicode-xid = "0.0.4"

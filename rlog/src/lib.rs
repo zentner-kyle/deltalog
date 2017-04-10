@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate log;
 extern crate unicode_xid;
+extern crate rand;
 
 mod bottom_up;
 mod bindings;
@@ -10,6 +11,7 @@ mod program;
 mod types;
 mod fact_table;
 mod optimize;
+pub mod generate;
 pub mod truth_value;
 
 use fact_table::{FactTable};

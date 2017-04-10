@@ -5,8 +5,9 @@ use name_table::{NameTable};
 use fact_table::{FactTable};
 use std::str::{FromStr};
 use truth_value::{TruthValue};
+use std::collections::hash_map::{HashMap, Entry};
 
-use types::{Term, Literal, Clause, Constant, Fact};
+use types::{Term, Literal, Clause, Constant, Fact, Predicate};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Error<'a> {
@@ -168,7 +169,7 @@ fn terms<'a, 'b>(src: &'a str, var_names: &'b mut NameTable) -> Result<'a, Vec<T
     }
 }
 
-fn literal<'a, 'b>(src: &'a str, var_names: &'b mut NameTable, predicate_names: &'b mut NameTable) -> Result<'a, Literal> {
+fn literal<'a, 'b, 'c>(src: &'a str, var_names: &'b mut NameTable, predicate_names: &'b mut NameTable, num_terms: &'c mut HashMap<Predicate, usize>) -> Result<'a, Literal> {
     let mut rest = src;
     rest = skip_whitespace(rest);
     let (predicate_name, r) = lowercase_identifier(rest)?;
@@ -181,7 +182,23 @@ fn literal<'a, 'b>(src: &'a str, var_names: &'b mut NameTable, predicate_names: 
     rest = skip_whitespace(rest);
     rest = character(rest, ')')?.1;
     let predicate = predicate_names.get(predicate_name);
-    return Ok((Literal::new_from_vec(predicate, ts), rest));
+    if correct_num_terms(num_terms, predicate, ts.len()) {
+        return Ok((Literal::new_from_vec(predicate, ts), rest));
+    } else {
+        return err_msg("Wrong number of terms in literal", src)
+    }
+}
+
+fn correct_num_terms<'a>(num_terms: &'a mut HashMap<Predicate, usize>, predicate: Predicate, new_num_terms: usize) -> bool {
+    match num_terms.entry(predicate) {
+        Entry::Occupied(pair) => {
+            *pair.get() == new_num_terms
+        },
+        Entry::Vacant(pair) => {
+            pair.insert(new_num_terms);
+            true
+        }
+    }
 }
 
 fn fact_terms<'a, 'b>(src: &'a str) -> Result<'a, Vec<Constant>> {
@@ -298,6 +315,7 @@ pub fn program<T>(source: &str) -> Result<(FactTable<T>, Program<T>, Vec<(FactTa
     let mut current_weight = T::dual_default();
     let mut current_confidence = T::default();
     let mut samples: Vec<(FactTable<T>, FactTable<T>)> = Vec::new();
+    let mut num_terms: HashMap<Predicate, usize> = HashMap::new();
     loop {
         rest = skip_whitespace(rest);
         if rest.len() == 0 {
@@ -321,7 +339,7 @@ pub fn program<T>(source: &str) -> Result<(FactTable<T>, Program<T>, Vec<(FactTa
             current_confidence = confidence;
         }
         let mut var_names = NameTable::new();
-        let (head, r) = literal(rest, &mut var_names, &mut program.predicate_names)
+        let (head, r) = literal(rest, &mut var_names, &mut program.predicate_names, &mut program.predicate_num_terms)
             .map(|(lit, r)| (Some(lit), r))
             .or_else(|_| character(rest, '?').map(|(_, r)| (None, r)))?;
         rest = r;
@@ -331,7 +349,7 @@ pub fn program<T>(source: &str) -> Result<(FactTable<T>, Program<T>, Vec<(FactTa
             let mut literals = Vec::new();
             rest = skip_whitespace(rest);
             loop {
-                let (lit, r) = literal(rest, &mut var_names, &mut program.predicate_names)?;
+                let (lit, r) = literal(rest, &mut var_names, &mut program.predicate_names, &mut program.predicate_num_terms)?;
                 rest = r;
                 literals.push(lit);
                 rest = skip_whitespace(rest);
@@ -368,6 +386,7 @@ mod tests {
     terms, prefix, literal, program};
     use types::{Term, Literal};
     use name_table::{NameTable};
+    use std::collections::hash_map::{HashMap};
 
     #[test]
     fn parse_characters() {
@@ -440,12 +459,13 @@ mod tests {
     fn test_literal() {
         let mut var_names = NameTable::new();
         let mut pred_names = NameTable::new();
-        assert!(literal("a(0)", &mut var_names, &mut pred_names).is_ok());
-        assert!(literal("b(0, 1, X, Y)", &mut var_names, &mut pred_names).is_ok());
+        let mut num_terms = HashMap::new();
+        assert!(literal("a(0)", &mut var_names, &mut pred_names, &mut num_terms).is_ok());
+        assert!(literal("b(0, 1, X, Y)", &mut var_names, &mut pred_names, &mut num_terms).is_ok());
         assert_eq!(var_names.get("Y"), 1);
         assert_eq!(pred_names.get("b"), 1);
-        assert_eq!(literal("b(1, X, Y)", &mut var_names, &mut pred_names).unwrap().0,
-        Literal::new_from_vec(1, vec![Term::Constant(1), Term::Variable(0), Term::Variable(1)]));
+        assert_eq!(literal("c(1, X, Y)", &mut var_names, &mut pred_names, &mut num_terms).unwrap().0,
+        Literal::new_from_vec(2, vec![Term::Constant(1), Term::Variable(0), Term::Variable(1)]));
     }
 
     #[test]

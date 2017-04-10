@@ -641,3 +641,65 @@ gy = -gb
 gx = w * ga
 gw = x * ga
 ```
+
+Sweet. We appear to have gotten gradient descent to work. There's probably a
+lot of optimization work we'll want to do at some point. Right now, the release
+version takes a few minutes to run through a hundred thousand iterations of
+gradient descent. This should be fast enough to try out `genetic optimization`
+techniques.
+
+So, how does that work? Fundamentally, we have two choices for how a rule gets
+added to the program. Either the rule is modified from another rule, or is
+randomly drawn from the space of possible rules. One thing that's not clear is
+quite what the space is. In particular, it's not clear what the maximum number
+of predicates should be. Adding any single rule which involves a predicate
+which is not in any other rule (or fact) is useless, but two such additions
+might be critical to finding a correct program. Perhaps we should allow new
+rules to be added that use the next predicate after all the existing predicates
+in the program. We could also introduce an evolutionary cost for using higher
+predicates.
+
+So we can create a clause by:
+  - Selecting a random predicate.
+  - Selecting a number of output variables up to the number of terms in the predicate.
+  - For each term, select to put an output there with probability (remaining output variables / remaining output slots). 
+  - Choosing a number of literals.
+  - For each literal, choosing a predicate, such that the sum of the number terms is less than or equal to the number of output variables.
+  - For each output variable, select a randomly not yet selected output term.
+  - For each term not yet selected, choose with some probability a constant and with the opposite probability a variable.
+  - If a constant is chosen, choose a constant randomly up to 1 more than the largest constant previously found in that term.
+  - If a variable is chosen, choose a random variable number up to 1 more than the current number of variables.
+
+This routine should work, and doesn't need to repeatedly reject a generated
+sample. It's probably not uniform over and space, but that shouldn't be too
+important. There's probably some priors we want to bake into it. It would also
+be nice to use the statistical trick from the head to ensure we use each output
+variable somewhere in the body.
+
+The second way is to find an existing clause and mutate it. Here, I would like
+to use behavioral techniques, since I feel like they should work well on
+datalog programs.
+
+The basic idea here is to find terms that result in high error. Using the
+`fact_adjustment` tables, we know what facts should be different for a
+predicate. How about the following algorithm: 
+ - Choose a clause to improve.
+ - For each term, set aside a place to sum the absolute error and the total error.
+ - Go through the latent fact table for the clause's head predicate.
+ - Go through each term in the fact.
+ - If that term's value never shows up in the normal fact table, add the absolute value of the fact adjustment value for that term, and the total.
+ - Choose a term to change using a weighted random choice, using the absolute value of the fact adjustment.
+ - If that term's total error is positive, the term is over constrained. Create a copy of the clause where the term is less constrained.
+ - If the term's total error is negative, the term in under constrained. Create a copy of the clause where the term is more constrained.
+ - It's probably worthwhile to do the "wrong thing" with some probability.
+ - If a term is a constant, it can be made less constrained by setting it to a variable.
+ - If a term is a variable, it might be made less constrained by various operations:
+  - Removing some (but not all) uses of that variable in the body.
+  - Changing what terms that variable is used in in the body.
+ - If a term is a constant, it canot be made more constrained.
+  - Perhaps the constant should be changed?
+ - If a term is a variable, it can be made more constrained in various ways:
+  - By turning it into a constant.
+  - By using it in more terms in the body.
+  - By using it in different terms in the body.
+  - By making the other terms in predicates it is in more constrained.

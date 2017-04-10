@@ -46,18 +46,24 @@ impl<R> Generator<R> where R: rand::Rng {
 
     fn gen_constant(&mut self, predicate: Predicate, term_index: usize) -> Constant {
         // Might want to increase by one.
-        let max_constant = 1 + *self.max_constant.get(&(predicate, term_index)).unwrap();
+        let max_constant = 1 + self.max_constant.get(&(predicate, term_index))
+            .cloned()
+            .unwrap_or(0usize);
         // Want inclusive range.
         self.rng.gen_range(0, 1 + max_constant)
     }
 
-    fn get_num_terms(&self, predicate: Predicate) -> usize {
-        *self.num_terms.get(&predicate).unwrap()
+    fn get_num_terms(&mut self, predicate: Predicate, max_new: usize) -> usize {
+        if let Some(&existing) = self.num_terms.get(&predicate) {
+            existing
+        } else {
+            self.rng.gen_range(0, 1 + max_new)
+        }
     }
 
-    fn gen_head(&mut self, max_body_len: usize) -> (Literal, usize) {
+    fn gen_head(&mut self, max_body_len: usize, max_new_predicate_terms: usize) -> (Literal, usize) {
         let predicate = self.gen_predicate();
-        let num_terms = self.get_num_terms(predicate);
+        let num_terms = self.get_num_terms(predicate, max_new_predicate_terms);
         let num_output_variables = if self.rng.gen_weighted_bool(8) {
             // With 1/8 probability, select a random number of output variables.
             self.rng.gen_range(0, num_terms + 1usize)
@@ -86,10 +92,9 @@ impl<R> Generator<R> where R: rand::Rng {
         return (head, num_output_variables);
     }
 
-    pub fn gen_clause(&mut self, max_body_len: usize) -> Clause {
-        let (head, num_output_variables) = self.gen_head(max_body_len);
+    pub fn gen_clause(&mut self, max_body_len: usize, max_new_predicate_terms: usize) -> Clause {
+        let (head, num_output_variables) = self.gen_head(max_body_len, max_new_predicate_terms);
         let mut body_len = self.rng.gen_range(1, 1 + max_body_len);
-        println!("initial body_len = {:?}", body_len);
         let mut body = Vec::with_capacity(body_len);
         let mut unused_output_variables: Vec<_> = (0..num_output_variables).map(|v| Some(v)).collect();
         self.rng.shuffle(&mut unused_output_variables);
@@ -101,13 +106,11 @@ impl<R> Generator<R> where R: rand::Rng {
         while num_total_body_terms < num_output_variables || predicates.len() < body_len {
             let predicate = self.gen_predicate();
             predicates.push(predicate);
-            let term_count = self.get_num_terms(predicate);
+            let term_count = self.get_num_terms(predicate, max_new_predicate_terms);
             num_terms.push(term_count);
             num_total_body_terms += term_count;
         }
         body_len = predicates.len();
-        println!("predicates = {:?}", predicates);
-        println!("num_terms = {:?}", num_terms);
         let mut num_remaining_output_terms: usize = num_total_body_terms;
         for (&predicate, &num_terms) in predicates.iter().zip(num_terms.iter()) {
             let mut terms = Vec::with_capacity(num_terms);
@@ -130,8 +133,8 @@ impl<R> Generator<R> where R: rand::Rng {
                         // With 1/3 probability, output a constant.
                         terms.push(Term::Constant(self.gen_constant(predicate, term_index)));
                     } else {
-                        // Might want to increase the number of variables by one.
-                        let variable = self.rng.gen_range(0, 1 + num_variables);
+                        // Might want to increase the number of variables by two.
+                        let variable = self.rng.gen_range(0, 2 + num_variables);
                         num_variables = cmp::max(num_variables, variable);
                         if variable < num_output_variables {
                             // Mark the corresponding output variable as used.
@@ -173,6 +176,7 @@ mod tests {
         a(X) :- b(X)
         "#).unwrap().0;
         let mut generator = Generator::new(rng, &facts, &program);
-        println!("generated_clause = {:?}", generator.gen_clause(4));
+        println!("generated_clause = {:?}", generator.gen_clause(4, 8));
+        println!("generated_clause = {:?}", generator.gen_clause(100, 8));
     }
 }

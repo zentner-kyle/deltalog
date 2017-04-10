@@ -1,7 +1,7 @@
-use std::collections::hash_map::{HashMap};
+use std::collections::hash_map::{HashMap, Entry};
 use std::fmt;
 
-use types::{Clause, ClauseIndex, Predicate};
+use types::{Clause, ClauseIndex, Predicate, Literal};
 use name_table::{NameTable};
 use truth_value::{TruthValue};
 
@@ -34,6 +34,33 @@ impl<T> Program<T> where T: TruthValue {
             }
         }
         return count;
+    }
+
+    pub fn check_num_terms(&mut self, literal: &Literal) -> Result<(), &'static str> {
+        let num_terms = literal.terms.len();
+        match self.predicate_num_terms.entry(literal.predicate) {
+            Entry::Occupied(mut pair) => {
+                if num_terms != *pair.get() {
+                    return Err("Wrong number of terms in predicate.");
+                }
+            },
+            Entry::Vacant(pair) => {
+                pair.insert(num_terms);
+            }
+        }
+        return Ok(());
+    }
+
+    pub fn push_clause(&mut self, clause: Clause, weight: T::Dual) -> Result<(), &'static str> {
+        if let Some(ref head) = clause.head {
+            self.check_num_terms(head)?;
+        }
+        for literal in &clause.body {
+            self.check_num_terms(literal)?;
+        }
+        self.clauses.push(clause);
+        self.clause_weights.push(weight);
+        return Ok(());
     }
 }
 

@@ -320,7 +320,6 @@ pub fn program<T>(source: &str) -> Result<(FactTable<T>, Program<T>, Vec<(FactTa
     let mut current_weight = T::dual_default();
     let mut current_confidence = T::default();
     let mut samples: Vec<(FactTable<T>, FactTable<T>)> = Vec::new();
-    let mut num_terms: HashMap<Predicate, usize> = HashMap::new();
     loop {
         rest = skip_whitespace(rest);
         if rest.len() == 0 {

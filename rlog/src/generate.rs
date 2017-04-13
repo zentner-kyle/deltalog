@@ -1,7 +1,7 @@
 
 use rand;
 use std::collections::hash_map::{HashMap, Entry};
-use types::{Predicate, Constant, Variable, Literal, Clause, TermIndex, Term};
+use types::{Predicate, Constant, Literal, Clause, TermIndex, Term};
 use fact_table::{FactTable};
 use truth_value::{TruthValue};
 use program::{Program};
@@ -18,7 +18,7 @@ pub struct Generator<R> where R: rand::Rng {
 impl<R> Generator<R> where R: rand::Rng {
     pub fn new<T>(rng: R, facts: &FactTable<T>, program: &Program<T>) -> Self where T: TruthValue {
         let max_predicate = program.predicate_names.len();
-        let mut max_constant = HashMap::new();
+        let max_constant = HashMap::new();
         let mut result = Generator {
             rng: rng,
             max_predicate: max_predicate,
@@ -66,7 +66,7 @@ impl<R> Generator<R> where R: rand::Rng {
     fn get_num_terms(&mut self, predicate: Predicate, max_new: usize) -> usize {
 
         match self.num_terms.entry(predicate) {
-            Entry::Occupied(mut pair) => {
+            Entry::Occupied(pair) => {
                 *pair.get()
             },
             Entry::Vacant(pair) => {
@@ -77,7 +77,7 @@ impl<R> Generator<R> where R: rand::Rng {
         }
     }
 
-    fn gen_head(&mut self, max_body_len: usize, max_new_predicate_terms: usize) -> (Literal, usize) {
+    fn gen_head(&mut self, max_new_predicate_terms: usize) -> (Literal, usize) {
         let predicate = self.gen_predicate();
         let num_terms = self.get_num_terms(predicate, max_new_predicate_terms);
         let num_output_variables = if self.rng.gen_weighted_bool(8) {
@@ -109,8 +109,8 @@ impl<R> Generator<R> where R: rand::Rng {
     }
 
     pub fn gen_clause(&mut self, max_body_len: usize, max_new_predicate_terms: usize) -> Clause {
-        let (head, num_output_variables) = self.gen_head(max_body_len, max_new_predicate_terms);
-        let mut body_len = self.rng.gen_range(1, 1 + max_body_len);
+        let (head, num_output_variables) = self.gen_head(max_new_predicate_terms);
+        let body_len = self.rng.gen_range(1, 1 + max_body_len);
         let mut body = Vec::with_capacity(body_len);
         let mut unused_output_variables: Vec<_> = (0..num_output_variables).map(|v| Some(v)).collect();
         self.rng.shuffle(&mut unused_output_variables);
@@ -126,7 +126,6 @@ impl<R> Generator<R> where R: rand::Rng {
             num_terms.push(term_count);
             num_total_body_terms += term_count;
         }
-        body_len = predicates.len();
         let mut num_remaining_output_terms: usize = num_total_body_terms;
         for (&predicate, &num_terms) in predicates.iter().zip(num_terms.iter()) {
             let mut terms = Vec::with_capacity(num_terms);
@@ -184,8 +183,6 @@ impl<R> fmt::Debug for Generator<R> where R: rand::Rng {
 #[cfg(test)]
 mod tests {
     use super::{Generator};
-    use program::Program;
-    use fact_table::FactTable;
     use parser::{program};
     use rand::XorShiftRng;
     use rand::SeedableRng;

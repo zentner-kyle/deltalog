@@ -48,7 +48,7 @@ impl<T> Program<T> where T: TruthValue {
         let predicate = fact.predicate;
         let num_terms = fact.terms.len();
         match self.predicate_num_terms.entry(predicate) {
-            Entry::Occupied(mut pair) => {
+            Entry::Occupied(pair) => {
                 if num_terms != *pair.get() {
                     return Err("Wrong number of terms in predicate.");
                 }
@@ -63,7 +63,7 @@ impl<T> Program<T> where T: TruthValue {
     pub fn check_num_terms(&mut self, literal: &Literal) -> Result<(), &'static str> {
         let num_terms = literal.terms.len();
         match self.predicate_num_terms.entry(literal.predicate) {
-            Entry::Occupied(mut pair) => {
+            Entry::Occupied(pair) => {
                 if num_terms != *pair.get() {
                     return Err("Wrong number of terms in predicate.");
                 }

@@ -218,7 +218,7 @@ impl Term {
                 if let Some(name) = var_names.get_name(var) {
                     write!(f, "{}", name)?;
                 } else {
-                    write!(f, "Var#{}", var);
+                    write!(f, "Var#{}", var)?;
                 }
             }
         }

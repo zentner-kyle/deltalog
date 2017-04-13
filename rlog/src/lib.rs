@@ -11,11 +11,13 @@ mod program;
 mod types;
 mod fact_table;
 mod optimize;
-pub mod generate;
-pub mod refine;
+mod generate;
+mod refine;
 pub mod truth_value;
 
+use rand::{Rng, thread_rng, XorShiftRng};
 use fact_table::{FactTable};
+use refine::{Refiner};
 
 pub struct Context<T> where T: truth_value::TruthValue {
     facts: fact_table::FactTable<T>,
@@ -76,5 +78,14 @@ impl<T> Context<T> where T: truth_value::TruthValue {
                 T::dual_adjust(&mut self.program.clause_weights[clause_idx], adjustment, learning_rate);
             }
         }
+    }
+
+    pub fn refine(&mut self, iterations: usize) {
+        let mut refiner = Refiner::new(thread_rng().gen::<XorShiftRng>(),
+            self.facts.clone(),
+            self.program.clone(),
+            self.samples.clone());
+        refiner.iterate(iterations);
+        self.program = refiner.to_program();
     }
 }

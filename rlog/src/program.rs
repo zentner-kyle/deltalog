@@ -6,7 +6,7 @@ use name_table::{NameTable};
 use truth_value::{TruthValue};
 use fact_table::FactTable;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Program<T> where T: TruthValue {
     pub clauses: Vec<Clause>,
     pub clause_weights: Vec<T::Dual>,

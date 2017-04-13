@@ -12,6 +12,7 @@ mod types;
 mod fact_table;
 mod optimize;
 pub mod generate;
+pub mod refine;
 pub mod truth_value;
 
 use fact_table::{FactTable};

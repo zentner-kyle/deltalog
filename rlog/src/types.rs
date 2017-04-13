@@ -154,8 +154,11 @@ impl Literal {
     }
 
     pub fn format(&self, f: &mut fmt::Formatter, var_names: &NameTable, pred_names: &NameTable) -> Result<(), fmt::Error> {
-        let name = pred_names.get_name(self.predicate).unwrap();
-        write!(f, "{}(", name)?;
+        if let Some(name) = pred_names.get_name(self.predicate) {
+            write!(f, "{}(", name)?;
+        } else {
+            write!(f, "predicate#{}(", self.predicate)?;
+        }
         for (i, term) in self.terms.iter().enumerate() {
             term.format(f, var_names)?;
             if i + 1 != self.terms.len() {
@@ -212,8 +215,11 @@ impl Term {
                 write!(f, "{}", cst)?;
             },
             &Term::Variable(var) => {
-                let name = var_names.get_name(var).unwrap();
-                write!(f, "{}", name)?;
+                if let Some(name) = var_names.get_name(var) {
+                    write!(f, "{}", name)?;
+                } else {
+                    write!(f, "Var#{}", var);
+                }
             }
         }
         return Ok(());

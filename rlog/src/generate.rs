@@ -6,6 +6,7 @@ use fact_table::{FactTable};
 use truth_value::{TruthValue};
 use program::{Program};
 use std::cmp;
+use std::fmt;
 
 pub struct Generator<R> where R: rand::Rng {
     rng: R,
@@ -18,9 +19,24 @@ impl<R> Generator<R> where R: rand::Rng {
     pub fn new<T>(rng: R, facts: &FactTable<T>, program: &Program<T>) -> Self where T: TruthValue {
         let max_predicate = program.predicate_names.len();
         let mut max_constant = HashMap::new();
+        let mut result = Generator {
+            rng: rng,
+            max_predicate: max_predicate,
+            num_terms: program.predicate_num_terms.clone(),
+            max_constant: max_constant,
+        };
+        result.update_max_constant(facts);
+        return result;
+    }
+
+    pub fn update_num_terms<T>(&mut self, program: &Program<T>) where T: TruthValue {
+        self.num_terms = program.predicate_num_terms.clone();
+    }
+
+    pub fn update_max_constant<T>(&mut self, facts: &FactTable<T>) where T: TruthValue {
         for (fact, _) in facts.all_facts() {
             for (index, constant) in fact.terms.into_iter().enumerate() {
-                match max_constant.entry((fact.predicate, index)) {
+                match self.max_constant.entry((fact.predicate, index)) {
                     Entry::Occupied(mut pair) => {
                         let old_val = *pair.get();
                         pair.insert(cmp::max(old_val, constant));
@@ -30,12 +46,6 @@ impl<R> Generator<R> where R: rand::Rng {
                     }
                 }
             }
-        }
-        Generator {
-            rng: rng,
-            max_predicate: max_predicate,
-            num_terms: program.predicate_num_terms.clone(),
-            max_constant: max_constant,
         }
     }
 
@@ -54,10 +64,16 @@ impl<R> Generator<R> where R: rand::Rng {
     }
 
     fn get_num_terms(&mut self, predicate: Predicate, max_new: usize) -> usize {
-        if let Some(&existing) = self.num_terms.get(&predicate) {
-            existing
-        } else {
-            self.rng.gen_range(0, 1 + max_new)
+
+        match self.num_terms.entry(predicate) {
+            Entry::Occupied(mut pair) => {
+                *pair.get()
+            },
+            Entry::Vacant(pair) => {
+                let n = self.rng.gen_range(0, 1 + max_new);
+                pair.insert(n);
+                n
+            }
         }
     }
 
@@ -155,6 +171,13 @@ impl<R> Generator<R> where R: rand::Rng {
         }
         let clause = Clause::new_from_vec(head, body);
         return clause;
+    }
+}
+
+impl<R> fmt::Debug for Generator<R> where R: rand::Rng {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "Generator {{ rng: *, max_predicate: {:?}, num_terms: {:?}, max_constant: {:?} }}",
+               self.max_predicate, self.num_terms, self.max_constant)
     }
 }
 

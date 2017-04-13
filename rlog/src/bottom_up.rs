@@ -30,6 +30,7 @@ fn match_clause<T>(facts: &FactTable<T>, clause: &Clause, clause_idx: ClauseInde
 }
 
 pub fn evaluate_bottom_up<T>(facts: &mut FactTable<T>, program: &Program<T>) where T: TruthValue {
+    facts.extend_num_predicates(program.num_predicates());
     loop {
         let mut fact_added_this_iter = false;
         for ((clause_idx, clause), truth) in program.clauses.iter().enumerate().zip(program.clause_weights.iter().cycle()) {

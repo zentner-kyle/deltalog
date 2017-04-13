@@ -20,11 +20,16 @@ pub enum Error<'a> {
 pub type Result<'a, T> = std::result::Result<(T, &'a str), Error<'a>>;
 
 fn err_msg<'a, T>(msg: &'static str, rest: &'a str) -> Result<'a, T> {
-    Err(Error::Msg {
+    Err(err_from_str(msg, rest))
+}
+
+fn err_from_str<'a>(msg: &'static str, rest: &'a str) -> Error<'a> {
+    Error::Msg {
         msg: msg,
         rest: rest,
-    })
+    }
 }
+
 
 fn some_char_is<F>(opt_char: Option<char>, f: F) -> bool where F: Fn(char) -> bool {
     if let Some(c) = opt_char {
@@ -324,6 +329,8 @@ pub fn program<T>(source: &str) -> Result<(FactTable<T>, Program<T>, Vec<(FactTa
         }
         let start_of_clause = rest;
         if let Ok((sample, r)) = sample(rest, &mut program.predicate_names) {
+            program.check_num_fact_terms(&sample.0).map_err(|s| err_from_str(s, rest))?;
+            program.check_num_fact_terms(&sample.1).map_err(|s| err_from_str(s, rest))?;
             rest = r;
             samples.push(sample);
             continue;
@@ -371,11 +378,13 @@ pub fn program<T>(source: &str) -> Result<(FactTable<T>, Program<T>, Vec<(FactTa
                 return err_msg("Invalid clause", start_of_clause);
             }
         } else if let (Some(lit), Ok((_, r))) = (head, character(rest, '.')) {
-            rest = r;
             if var_names.to_reverse().len() != 0 {
                 return err_msg("Fact contained variables", start_of_clause);
             }
-            facts.add_fact(lit.to_fact(), current_confidence.clone());
+            let fact = lit.to_fact();
+            program.check_num_single_fact_terms(&fact).map_err(|s| err_from_str(s, rest))?;
+            facts.add_fact(fact, current_confidence.clone());
+            rest = r;
         }
     }
 }

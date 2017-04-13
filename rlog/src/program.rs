@@ -1,9 +1,10 @@
 use std::collections::hash_map::{HashMap, Entry};
 use std::fmt;
 
-use types::{Clause, ClauseIndex, Predicate, Literal};
+use types::{Clause, ClauseIndex, Predicate, Literal, Fact};
 use name_table::{NameTable};
 use truth_value::{TruthValue};
+use fact_table::FactTable;
 
 #[derive(Debug)]
 pub struct Program<T> where T: TruthValue {
@@ -36,6 +37,29 @@ impl<T> Program<T> where T: TruthValue {
         return count;
     }
 
+    pub fn check_num_fact_terms(&mut self, facts: &FactTable<T>) -> Result<(), &'static str> {
+        for (fact, _) in facts.all_facts() {
+            self.check_num_single_fact_terms(&fact)?;
+        }
+        return Ok(());
+    }
+
+    pub fn check_num_single_fact_terms(&mut self, fact: &Fact) -> Result<(), &'static str> {
+        let predicate = fact.predicate;
+        let num_terms = fact.terms.len();
+        match self.predicate_num_terms.entry(predicate) {
+            Entry::Occupied(mut pair) => {
+                if num_terms != *pair.get() {
+                    return Err("Wrong number of terms in predicate.");
+                }
+            },
+            Entry::Vacant(pair) => {
+                pair.insert(num_terms);
+            }
+        }
+        return Ok(());
+    }
+
     pub fn check_num_terms(&mut self, literal: &Literal) -> Result<(), &'static str> {
         let num_terms = literal.terms.len();
         match self.predicate_num_terms.entry(literal.predicate) {
@@ -51,15 +75,17 @@ impl<T> Program<T> where T: TruthValue {
         return Ok(());
     }
 
-    pub fn push_clause(&mut self, clause: Clause, weight: T::Dual) -> Result<(), &'static str> {
+    pub fn push_clause(&mut self, clause: Clause, weight: T::Dual, var_names: NameTable) -> Result<(), &'static str> {
         if let Some(ref head) = clause.head {
             self.check_num_terms(head)?;
         }
         for literal in &clause.body {
             self.check_num_terms(literal)?;
         }
+        let clause_idx = self.clauses.len();
         self.clauses.push(clause);
         self.clause_weights.push(weight);
+        self.clause_variable_names.insert(clause_idx, var_names);
         return Ok(());
     }
 }
@@ -67,8 +93,8 @@ impl<T> Program<T> where T: TruthValue {
 impl<T> fmt::Display for Program<T> where T: TruthValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         for (i, clause) in self.clauses.iter().enumerate() {
-            let weight = self.clause_weights.get(i).unwrap();
-            write!(f, "{}", T::dual_as_datalog(weight))?;
+            let weight = self.clause_weights.get(i).cloned().unwrap_or_else(|| T::dual_default());
+            write!(f, "{}", T::dual_as_datalog(&weight))?;
             clause.format(f, self.clause_variable_names.get(&i).unwrap(), &self.predicate_names)?;
             write!(f, "\n")?;
         }

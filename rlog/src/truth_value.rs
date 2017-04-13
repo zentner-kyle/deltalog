@@ -21,6 +21,7 @@ pub trait TruthValue : Clone + PartialEq + Eq + Debug + PartialOrd + Ord {
     fn dual_adjust(dual: &mut Self::Dual, adjust: &Self::Dual, rate: f64);
     fn as_datalog(&self) -> String;
     fn dual_as_datalog(dual: &Self::Dual) -> String;
+    fn dual_less(a: &Self::Dual, b: &Self::Dual, b_coeff: f64) -> bool;
 }
 
 impl TruthValue for () {
@@ -46,6 +47,9 @@ impl TruthValue for () {
     }
     fn dual_as_datalog(_: &Self::Dual) -> String {
         return "".to_owned();
+    }
+    fn dual_less(_: &Self::Dual, _: &Self::Dual, _: f64) -> bool {
+        false
     }
 }
 
@@ -163,5 +167,9 @@ impl TruthValue for MaxFloat64 {
 
     fn dual_as_datalog(dual: &Self::Dual) -> String {
         return format!("weight({}) ", dual.0);
+    }
+
+    fn dual_less(a: &Self::Dual, b: &Self::Dual, b_coeff: f64) -> bool {
+        return a.0 < b_coeff * b.0;
     }
 }

@@ -1,6 +1,6 @@
 use std::collections::hash_map::{HashMap};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NameTable {
     name_to_index: HashMap<String, usize>,
     index_to_name: HashMap<usize, String>,

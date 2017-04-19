@@ -48,12 +48,11 @@ pub fn gradient_step<T>(program: &Program<T>,
                         max_iters: usize) where T: TruthValue {
     // Convert expected truth values into initial adjoints.
     let mut frontier: Vec<_> = expected
-        .all_facts()
-        .into_iter()
+        .all_facts_iter()
         .map(|(fact, truth)| {
-            let z = facts.get(&fact).cloned().unwrap_or_else(|| T::zero());
-            let gz = T::sub(&truth, &z);
-            (fact, z, gz, HashSet::new())
+            let z = facts.get(fact).cloned().unwrap_or_else(|| T::zero());
+            let gz = T::sub(truth, &z);
+            (fact.clone(), z, gz, HashSet::new())
         })
         .collect();
     let mut iterations = 0;
@@ -105,7 +104,7 @@ pub fn gradient_step<T>(program: &Program<T>,
     }
 }
 
-pub struct AdjustmentResult<T> where T: TruthValue {
+pub struct Adjustment<T> where T: TruthValue {
     pub clause_adjustments: Vec<T::Dual>,
     pub apparent_fact_adjustments: FactTable<T>,
     pub latent_fact_adjustments: FactTable<T>,
@@ -115,7 +114,7 @@ pub struct AdjustmentResult<T> where T: TruthValue {
 pub fn compute_adjustments<T>(program: &Program<T>,
                               facts: &FactTable<T>,
                               samples: &Vec<(FactTable<T>, FactTable<T>)>,
-                              max_iters: usize) -> AdjustmentResult<T> where T: TruthValue {
+                              max_iters: usize) -> Adjustment<T> where T: TruthValue {
     let mut clause_adjustments = vec![T::dual_zero(); program.clauses.len()];
     let mut latent_fact_adjustments: FactTable<T> = FactTable::new();
     let mut apparent_fact_adjustments: FactTable<T> = FactTable::new();
@@ -133,7 +132,7 @@ pub fn compute_adjustments<T>(program: &Program<T>,
                       &mut latent_fact_adjustments,
                       max_iters);
     }
-    return AdjustmentResult {
+    return Adjustment {
         clause_adjustments: clause_adjustments,
         apparent_fact_adjustments: apparent_fact_adjustments,
         latent_fact_adjustments: latent_fact_adjustments,

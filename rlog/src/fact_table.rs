@@ -74,6 +74,30 @@ impl<'a, T> Iterator for FactTableIter<'a, T> where T: TruthValue {
     }
 }
 
+pub struct AllFactIter<'a, T: 'a> where T: TruthValue {
+    vec_iter: slice::Iter<'a, HashMap<Fact, FactRecord<T>>>,
+    map_iter: Option<hash_map::Iter<'a, Fact, FactRecord<T>>,>
+}
+
+impl<'a, T> Iterator for AllFactIter<'a, T> where T: TruthValue {
+    type Item=(&'a Fact, &'a T);
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(ref mut map_iter) = self.map_iter {
+                if let Some((fact, record)) = map_iter.next() {
+                    return Some((fact, &record.truth));
+                }
+            }
+            if let Some(map) = self.vec_iter.next() {
+                self.map_iter = Some(map.iter());
+            } else {
+                break;
+            }
+        }
+        return None;
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct FactTable<T> where T: TruthValue {
     maps: Vec<HashMap<Fact, FactRecord<T>>>,
@@ -123,12 +147,20 @@ impl<T> FactTable<T> where T: TruthValue {
         return output;
     }
 
+    #[cfg(test)]
     pub fn all_facts(&self) -> Vec<(Fact, T)> {
         self.maps
             .iter()
             .flat_map(|t| t.iter())
             .map(|(f, r)| (f.clone(), r.truth.clone()))
             .collect()
+    }
+
+    pub fn all_facts_iter(&self) -> AllFactIter<T> {
+        AllFactIter {
+            vec_iter: self.maps.iter(),
+            map_iter: None,
+        }
     }
 
     // Returns true if the fact was not previously in the table.

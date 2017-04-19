@@ -38,8 +38,8 @@ impl<T> Program<T> where T: TruthValue {
     }
 
     pub fn check_num_fact_terms(&mut self, facts: &FactTable<T>) -> Result<(), &'static str> {
-        for (fact, _) in facts.all_facts() {
-            self.check_num_single_fact_terms(&fact)?;
+        for (fact, _) in facts.all_facts_iter() {
+            self.check_num_single_fact_terms(fact)?;
         }
         return Ok(());
     }

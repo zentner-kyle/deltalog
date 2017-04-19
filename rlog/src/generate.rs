@@ -34,8 +34,8 @@ impl<R> Generator<R> where R: rand::Rng {
     }
 
     pub fn update_max_constant<T>(&mut self, facts: &FactTable<T>) where T: TruthValue {
-        for (fact, _) in facts.all_facts() {
-            for (index, constant) in fact.terms.into_iter().enumerate() {
+        for (fact, _) in facts.all_facts_iter() {
+            for (index, &constant) in fact.terms.iter().enumerate() {
                 match self.max_constant.entry((fact.predicate, index)) {
                     Entry::Occupied(mut pair) => {
                         let old_val = *pair.get();

@@ -4,15 +4,14 @@ use generate::Generator;
 use name_table::NameTable;
 use optimize::compute_adjustments;
 use program::Program;
-use rand;
+use rand::{Rng, XorShiftRng};
 use std::mem::swap;
 use truth_value::TruthValue;
 
-pub struct Refiner<R, T>
-    where R: rand::Rng,
-          T: TruthValue
+pub struct Refiner<T>
+    where T: TruthValue
 {
-    generator: Generator<R>,
+    generator: Generator<XorShiftRng>,
     base_facts: FactTable<T>,
     program: Program<T>,
     samples: Vec<(FactTable<T>, FactTable<T>)>,
@@ -26,19 +25,20 @@ pub struct Refiner<R, T>
     default_clause_weight: T::Dual,
 }
 
-impl<R, T> Refiner<R, T>
-    where R: rand::Rng,
-          T: TruthValue
+impl<T> Refiner<T>
+    where T: TruthValue
 {
-    pub fn new(rng: R,
-               facts: FactTable<T>,
-               program: Program<T>,
-               samples: Vec<(FactTable<T>, FactTable<T>)>)
-               -> Self {
+    pub fn new<R>(mut rng: R,
+                  facts: FactTable<T>,
+                  program: Program<T>,
+                  samples: Vec<(FactTable<T>, FactTable<T>)>)
+                  -> Self
+        where R: Rng
+    {
         let mut default_clause_weight = T::dual_zero();
         T::dual_adjust(&mut default_clause_weight, &T::dual_default(), 0.5);
         Refiner {
-            generator: Generator::new(rng, &facts, &program),
+            generator: Generator::new(rng.gen::<XorShiftRng>(), &facts, &program),
             base_facts: facts,
             program: program,
             samples: samples,

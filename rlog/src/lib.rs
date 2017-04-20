@@ -14,6 +14,7 @@ mod optimize;
 mod generate;
 mod refine;
 mod reconstrain;
+mod util;
 pub mod truth_value;
 
 use fact_table::FactTable;

@@ -1,15 +1,18 @@
 
-use rand;
-use generate::Generator;
-use truth_value::TruthValue;
-use program::Program;
-use fact_table::FactTable;
-use optimize::compute_adjustments;
 use bottom_up::evaluate_bottom_up;
+use fact_table::FactTable;
+use generate::Generator;
 use name_table::NameTable;
+use optimize::compute_adjustments;
+use program::Program;
+use rand;
 use std::mem::swap;
+use truth_value::TruthValue;
 
-pub struct Refiner<R, T> where R: rand::Rng, T: TruthValue {
+pub struct Refiner<R, T>
+    where R: rand::Rng,
+          T: TruthValue
+{
     generator: Generator<R>,
     base_facts: FactTable<T>,
     program: Program<T>,
@@ -24,8 +27,15 @@ pub struct Refiner<R, T> where R: rand::Rng, T: TruthValue {
     default_clause_weight: T::Dual,
 }
 
-impl<R, T> Refiner<R, T> where R: rand::Rng, T: TruthValue {
-    pub fn new(rng: R, facts: FactTable<T>, program: Program<T>, samples: Vec<(FactTable<T>, FactTable<T>)>) -> Self {
+impl<R, T> Refiner<R, T>
+    where R: rand::Rng,
+          T: TruthValue
+{
+    pub fn new(rng: R,
+               facts: FactTable<T>,
+               program: Program<T>,
+               samples: Vec<(FactTable<T>, FactTable<T>)>)
+               -> Self {
         let mut default_clause_weight = T::dual_zero();
         T::dual_adjust(&mut default_clause_weight, &T::dual_default(), 0.5);
         Refiner {
@@ -46,9 +56,14 @@ impl<R, T> Refiner<R, T> where R: rand::Rng, T: TruthValue {
 
     pub fn fit_weights(&mut self) {
         for _ in 0..self.gradient_iterations {
-            let res = compute_adjustments(&self.program, &self.base_facts, &self.samples, self.step_iterations);
+            let res = compute_adjustments(&self.program,
+                                          &self.base_facts,
+                                          &self.samples,
+                                          self.step_iterations);
             for (clause_idx, adjustment) in res.clause_adjustments.iter().enumerate() {
-                T::dual_adjust(&mut self.program.clause_weights[clause_idx], adjustment, self.learning_rate);
+                T::dual_adjust(&mut self.program.clause_weights[clause_idx],
+                               adjustment,
+                               self.learning_rate);
             }
         }
     }
@@ -59,10 +74,13 @@ impl<R, T> Refiner<R, T> where R: rand::Rng, T: TruthValue {
         self.generator.update_max_constant(&result_facts);
         self.generator.update_num_terms(&self.program);
         for _ in 0..self.num_clauses_to_add {
-            self.program.push_clause(self.generator.gen_clause(self.max_new_body_len,
-                                                               self.max_new_predicate_terms),
-                                                               self.default_clause_weight.clone(),
-                                                               NameTable::new()).unwrap();
+            self.program
+                .push_clause(self.generator
+                                 .gen_clause(self.max_new_body_len,
+                                             self.max_new_predicate_terms),
+                             self.default_clause_weight.clone(),
+                             NameTable::new())
+                .unwrap();
         }
     }
 
@@ -80,15 +98,22 @@ impl<R, T> Refiner<R, T> where R: rand::Rng, T: TruthValue {
         let weights = program.clause_weights;
         for (clause_idx, (clause, weight)) in clauses.into_iter().zip(weights).enumerate() {
             if T::dual_less(&mean_weight, &weight, self.clause_weight_cutoff_coeff) {
-                let clause_var_names = program.clause_variable_names.remove(&clause_idx).unwrap_or_else(|| NameTable::new());
-                self.program.push_clause(clause, weight, clause_var_names).unwrap();
+                let clause_var_names = program
+                    .clause_variable_names
+                    .remove(&clause_idx)
+                    .unwrap_or_else(|| NameTable::new());
+                self.program
+                    .push_clause(clause, weight, clause_var_names)
+                    .unwrap();
             }
         }
         for &(ref input, ref output) in &self.samples {
             self.program.check_num_fact_terms(input).unwrap();
             self.program.check_num_fact_terms(output).unwrap();
         }
-        self.program.check_num_fact_terms(&self.base_facts).unwrap();
+        self.program
+            .check_num_fact_terms(&self.base_facts)
+            .unwrap();
     }
 
     pub fn iterate(&mut self, iterations: usize) {
@@ -112,10 +137,10 @@ impl<R, T> Refiner<R, T> where R: rand::Rng, T: TruthValue {
 
 #[cfg(test)]
 mod tests {
-    use super::{Refiner};
-    use parser::{program};
-    use rand::XorShiftRng;
+    use super::Refiner;
+    use parser::program;
     use rand::SeedableRng;
+    use rand::XorShiftRng;
     use truth_value::MaxFloat64;
 
     #[test]
@@ -127,7 +152,9 @@ mod tests {
             b(1)
         output
             a(1).
-        "#).unwrap().0;
+        "#)
+                .unwrap()
+                .0;
         let mut refiner = Refiner::new(rng, facts, program, samples);
         refiner.iterate(10);
         println!("program = {}", refiner.get_program());
@@ -158,7 +185,9 @@ mod tests {
             c(3)
         output
             types(0).
-        "#).unwrap().0;
+        "#)
+                .unwrap()
+                .0;
         let mut refiner = Refiner::new(rng, facts, program, samples);
         refiner.iterate(1);
         println!("program = {}", refiner.get_program());

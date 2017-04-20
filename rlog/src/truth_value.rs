@@ -1,7 +1,8 @@
-use std::fmt::{Debug};
-use std::cmp::{Ordering};
 
-pub trait TruthValue : Clone + PartialEq + Eq + Debug + PartialOrd + Ord {
+use std::cmp::Ordering;
+use std::fmt::Debug;
+
+pub trait TruthValue: Clone + PartialEq + Eq + Debug + PartialOrd + Ord {
     type Dual: Clone + PartialEq + Debug + PartialOrd + Ord;
     fn default() -> Self;
     fn zero() -> Self;
@@ -33,17 +34,27 @@ impl TruthValue for () {
     fn dual_default() -> Self::Dual {}
     fn dual_zero() -> Self::Dual {}
     fn either(_: &Self, _: &Self) -> Self {}
-    fn back_either(_: &Self, _: &Self, _: &Self) -> (Self, Self) { ((), ()) }
+    fn back_either(_: &Self, _: &Self, _: &Self) -> (Self, Self) {
+        ((), ())
+    }
     fn both(_: &Self, _: &Self) -> Self {}
-    fn back_both(_: &Self, _: &Self, _: &Self) -> (Self, Self) { ((), ()) }
+    fn back_both(_: &Self, _: &Self, _: &Self) -> (Self, Self) {
+        ((), ())
+    }
     fn finalize(_: &Self::Dual, _: &Self) -> Self {}
-    fn back_finalize(_: &Self::Dual, _: &Self, _: &Self) -> (Self::Dual, Self) { ((), ()) }
+    fn back_finalize(_: &Self::Dual, _: &Self, _: &Self) -> (Self::Dual, Self) {
+        ((), ())
+    }
     fn sub(_: &Self, _: &Self) -> Self {}
     fn sum(_: &Self, _: &Self) -> Self {}
     fn dual_sum(_: &Self::Dual, _: &Self::Dual) -> Self::Dual {}
     fn dual_adjust(_: &mut Self::Dual, _: &Self::Dual, _: f64) {}
-    fn parse(_: &str) -> Option<(Self, &str)> { None }
-    fn parse_dual(_: &str) -> Option<(Self::Dual, &str)> { None }
+    fn parse(_: &str) -> Option<(Self, &str)> {
+        None
+    }
+    fn parse_dual(_: &str) -> Option<(Self::Dual, &str)> {
+        None
+    }
     fn as_datalog(&self) -> String {
         return "".to_owned();
     }
@@ -96,7 +107,7 @@ impl TruthValue for MaxFloat64 {
     type Dual = MaxFloat64Dual;
 
     fn default() -> Self {
-        MaxFloat64(1.0) 
+        MaxFloat64(1.0)
     }
 
     fn zero() -> Self {
@@ -104,11 +115,11 @@ impl TruthValue for MaxFloat64 {
     }
 
     fn dual_default() -> Self::Dual {
-        MaxFloat64Dual(1.0) 
+        MaxFloat64Dual(1.0)
     }
 
     fn dual_zero() -> Self::Dual {
-        MaxFloat64Dual(0.0) 
+        MaxFloat64Dual(0.0)
     }
 
     fn either(a: &Self, b: &Self) -> Self {

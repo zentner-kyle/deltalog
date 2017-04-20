@@ -1,7 +1,7 @@
 use std::iter;
+use truth_value::TruthValue;
 
-use types::{Constant, Term, Literal, Fact};
-use truth_value::{TruthValue};
+use types::{Constant, Fact, Literal, Term};
 
 #[derive(Clone, Copy, Debug, PartialEq, Hash)]
 enum Binding {
@@ -10,14 +10,17 @@ enum Binding {
 }
 
 #[derive(Clone, Debug, PartialEq, Hash)]
-pub struct Bindings<T> where T: TruthValue {
+pub struct Bindings<T>
+    where T: TruthValue
+{
     bindings: Vec<Binding>,
     weight: T::Dual,
     truth: T,
 }
 
-impl<T> Bindings<T> where T: TruthValue {
-
+impl<T> Bindings<T>
+    where T: TruthValue
+{
     #[cfg(test)]
     pub fn new(num_vars: usize) -> Self {
         Bindings {
@@ -34,7 +37,7 @@ impl<T> Bindings<T> where T: TruthValue {
             truth: T::default(),
         }
     }
-    
+
     pub fn truth(&self) -> T {
         T::finalize(&self.weight, &self.truth)
     }
@@ -55,15 +58,15 @@ impl<T> Bindings<T> where T: TruthValue {
                     if cst != *constant {
                         return None;
                     }
-                },
+                }
                 &Term::Variable(vrb) => {
                     match &mut next_binds.bindings[vrb] {
                         &mut Binding::Bound(cst) => {
                             if cst != *constant {
                                 return None;
                             }
-                        },
-                        binding@&mut Binding::Unbound => {
+                        }
+                        binding @ &mut Binding::Unbound => {
                             *binding = Binding::Bound(constant.clone());
                         }
                     }
@@ -95,7 +98,7 @@ impl<T> Bindings<T> where T: TruthValue {
                     } else {
                         unreachable!("Variable was not bound in when trying to solidify literal.");
                     }
-                },
+                }
                 &Term::Constant(cst) => {
                     constants.push(cst);
                 }
@@ -107,13 +110,15 @@ impl<T> Bindings<T> where T: TruthValue {
 
 #[cfg(test)]
 mod tests {
-    use super::{Bindings};
-    use types::{Term, Literal, Fact};
+    use super::Bindings;
+    use types::{Fact, Literal, Term};
 
     #[test]
     fn match_no_variables() {
         let binds = Bindings::<()>::new(0);
-        let lit = Literal::new_from_vec(0, vec![Term::Constant(0), Term::Constant(1), Term::Constant(2)]);
+        let lit =
+            Literal::new_from_vec(0,
+                                  vec![Term::Constant(0), Term::Constant(1), Term::Constant(2)]);
         let fact = Fact::new_from_vec(0, vec![0, 1, 2]);
         assert!(binds.refine(&lit, &fact, &()).is_some());
     }
@@ -143,9 +148,15 @@ mod tests {
 
         let lit2 = Literal::new_from_vec(1, vec![Term::Variable(1), Term::Variable(0)]);
         let good_lit2_fact = Fact::new_from_vec(1, vec![3, 2]);
-        assert!(binds.clone().refine(&lit2, &good_lit2_fact, &()).is_some());
+        assert!(binds
+                    .clone()
+                    .refine(&lit2, &good_lit2_fact, &())
+                    .is_some());
         let bad_lit2_fact = Fact::new_from_vec(1, vec![2, 3]);
-        assert!(binds.clone().refine(&lit2, &bad_lit2_fact, &()).is_none());
+        assert!(binds
+                    .clone()
+                    .refine(&lit2, &bad_lit2_fact, &())
+                    .is_none());
     }
 
     #[test]

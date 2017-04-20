@@ -1,20 +1,25 @@
-use std::collections::hash_map;
-use std::collections::hash_map::{HashMap, Entry};
-use std::slice;
-use std::iter;
 
-use bindings::{Bindings};
-use name_table::{NameTable};
-use types::{Fact, Predicate, Literal, ClauseIndex};
-use truth_value::{TruthValue};
+
+use bindings::Bindings;
+use name_table::NameTable;
+use std::collections::hash_map;
+use std::collections::hash_map::{Entry, HashMap};
+use std::iter;
+use std::slice;
+use truth_value::TruthValue;
+use types::{ClauseIndex, Fact, Literal, Predicate};
 
 #[derive(Clone, Debug, PartialEq)]
-struct FactRecord<T> where T: TruthValue {
+struct FactRecord<T>
+    where T: TruthValue
+{
     bindings_set: Vec<(ClauseIndex, Bindings<T>)>,
     truth: T,
 }
 
-impl<T> FactRecord<T> where T: TruthValue {
+impl<T> FactRecord<T>
+    where T: TruthValue
+{
     fn new(truth: T, clause_idx: usize, bindings: Bindings<T>) -> Self {
         let mut bind_set = Vec::new();
         let to_insert = (clause_idx, bindings);
@@ -44,25 +49,35 @@ impl<T> FactRecord<T> where T: TruthValue {
     }
 }
 
-pub struct CauseIter<'a, T: 'a> where T: TruthValue {
+pub struct CauseIter<'a, T: 'a>
+    where T: TruthValue
+{
     inner: slice::Iter<'a, (ClauseIndex, Bindings<T>)>,
 }
 
-impl<'a, T> Iterator for CauseIter<'a, T> where T: TruthValue {
-    type Item=(ClauseIndex, &'a Bindings<T>);
+impl<'a, T> Iterator for CauseIter<'a, T>
+    where T: TruthValue
+{
+    type Item = (ClauseIndex, &'a Bindings<T>);
     fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next().map(|&(clause_idx, ref bindings)| (clause_idx, bindings))
+        self.inner
+            .next()
+            .map(|&(clause_idx, ref bindings)| (clause_idx, bindings))
     }
 }
 
-pub struct FactTableIter<'a, T: 'a> where T: TruthValue {
+pub struct FactTableIter<'a, T: 'a>
+    where T: TruthValue
+{
     map_iter: hash_map::Iter<'a, Fact, FactRecord<T>>,
     literal: &'a Literal,
     bindings: Bindings<T>,
 }
 
-impl<'a, T> Iterator for FactTableIter<'a, T> where T: TruthValue {
-    type Item=(Bindings<T>, &'a Fact, &'a T);
+impl<'a, T> Iterator for FactTableIter<'a, T>
+    where T: TruthValue
+{
+    type Item = (Bindings<T>, &'a Fact, &'a T);
     fn next(&mut self) -> Option<Self::Item> {
         while let Some((fact, record)) = self.map_iter.next() {
             let truth = &record.truth;
@@ -74,13 +89,17 @@ impl<'a, T> Iterator for FactTableIter<'a, T> where T: TruthValue {
     }
 }
 
-pub struct AllFactIter<'a, T: 'a> where T: TruthValue {
+pub struct AllFactIter<'a, T: 'a>
+    where T: TruthValue
+{
     vec_iter: slice::Iter<'a, HashMap<Fact, FactRecord<T>>>,
-    map_iter: Option<hash_map::Iter<'a, Fact, FactRecord<T>>,>
+    map_iter: Option<hash_map::Iter<'a, Fact, FactRecord<T>>>,
 }
 
-impl<'a, T> Iterator for AllFactIter<'a, T> where T: TruthValue {
-    type Item=(&'a Fact, &'a T);
+impl<'a, T> Iterator for AllFactIter<'a, T>
+    where T: TruthValue
+{
+    type Item = (&'a Fact, &'a T);
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             if let Some(ref mut map_iter) = self.map_iter {
@@ -99,21 +118,24 @@ impl<'a, T> Iterator for AllFactIter<'a, T> where T: TruthValue {
 }
 
 #[derive(Clone, Debug)]
-pub struct FactTable<T> where T: TruthValue {
+pub struct FactTable<T>
+    where T: TruthValue
+{
     maps: Vec<HashMap<Fact, FactRecord<T>>>,
 }
 
-impl<T> FactTable<T> where T: TruthValue {
+impl<T> FactTable<T>
+    where T: TruthValue
+{
     pub fn new() -> Self {
-        FactTable {
-            maps: Vec::new(),
-        }
+        FactTable { maps: Vec::new() }
     }
 
     pub fn extend_num_predicates(&mut self, predicate: Predicate) {
         if predicate >= self.maps.len() {
             let difference = 1 + predicate - self.maps.len();
-            self.maps.extend(iter::repeat(HashMap::new()).take(difference));
+            self.maps
+                .extend(iter::repeat(HashMap::new()).take(difference));
         }
     }
 
@@ -127,11 +149,17 @@ impl<T> FactTable<T> where T: TruthValue {
         return was_new_fact_added;
     }
 
-    pub fn iter<'a, 'b, 'c>(&'a self, literal: &'b Literal, bindings: Bindings<T>) -> FactTableIter<'c, T> where 'a : 'c, 'b : 'c {
+    pub fn iter<'a, 'b, 'c>(&'a self,
+                            literal: &'b Literal,
+                            bindings: Bindings<T>)
+                            -> FactTableIter<'c, T>
+        where 'a: 'c,
+              'b: 'c
+    {
         FactTableIter::<'c, T> {
             map_iter: self.maps[literal.predicate].iter(),
             literal: literal,
-            bindings: bindings, 
+            bindings: bindings,
         }
     }
 
@@ -141,7 +169,11 @@ impl<T> FactTable<T> where T: TruthValue {
         for table in &self.maps {
             for (fact, record) in table.iter() {
                 let truth = &record.truth;
-                writeln!(&mut output, "{}{}", truth.as_datalog(), fact.to_display(predicate_names)).unwrap();
+                writeln!(&mut output,
+                         "{}{}",
+                         truth.as_datalog(),
+                         fact.to_display(predicate_names))
+                        .unwrap();
             }
         }
         return output;
@@ -172,7 +204,7 @@ impl<T> FactTable<T> where T: TruthValue {
                 let mut record = pair.get_mut();
                 record.truth = T::either(&record.truth, &truth);
                 false
-            },
+            }
             Entry::Vacant(pair) => {
                 pair.insert(FactRecord::from_truth(truth));
                 true
@@ -189,7 +221,7 @@ impl<T> FactTable<T> where T: TruthValue {
                 let mut old_record = pair.get_mut();
                 old_record.join(record);
                 false
-            },
+            }
             Entry::Vacant(pair) => {
                 pair.insert(record);
                 true
@@ -219,9 +251,7 @@ impl<T> FactTable<T> where T: TruthValue {
     pub fn get_causes_unmut<'a>(&'a self, fact: &Fact) -> Option<CauseIter<'a, T>> {
         self.maps[fact.predicate]
             .get(fact)
-            .map(|r| CauseIter {
-                inner: r.bindings_set.iter()
-            })
+            .map(|r| CauseIter { inner: r.bindings_set.iter() })
     }
 
 

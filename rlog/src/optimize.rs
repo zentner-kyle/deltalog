@@ -1,14 +1,15 @@
-use std::collections::hash_set::{HashSet};
 
-use truth_value::{TruthValue};
-use bottom_up::{evaluate_bottom_up};
-use fact_table::{FactTable};
-use program::{Program};
+use bottom_up::evaluate_bottom_up;
+use fact_table::FactTable;
+use program::Program;
+use std::collections::hash_set::HashSet;
+
+use truth_value::TruthValue;
 
 /// The following math probably needs to be cleaned up in a variety of ways.
 /// There's j indices everywhere, but they're not really meaningful, since they're literally
 /// everywhere. They were supposed to indicate the current clause or something.
-/// If computing the original truth values uses the following formulae: 
+/// If computing the original truth values uses the following formulae:
 ///
 /// i is the index of the literal from which the fact is drawn.
 /// j is the index of the cause of the fact.
@@ -45,15 +46,17 @@ pub fn gradient_step<T>(program: &Program<T>,
                         clause_adjustments: &mut Vec<T::Dual>,
                         apparent_fact_adjustments: &mut FactTable<T>,
                         latent_fact_adjustments: &mut FactTable<T>,
-                        max_iters: usize) where T: TruthValue {
+                        max_iters: usize)
+    where T: TruthValue
+{
     // Convert expected truth values into initial adjoints.
     let mut frontier: Vec<_> = expected
         .all_facts_iter()
         .map(|(fact, truth)| {
-            let z = facts.get(fact).cloned().unwrap_or_else(|| T::zero());
-            let gz = T::sub(truth, &z);
-            (fact.clone(), z, gz, HashSet::new())
-        })
+                 let z = facts.get(fact).cloned().unwrap_or_else(|| T::zero());
+                 let gz = T::sub(truth, &z);
+                 (fact.clone(), z, gz, HashSet::new())
+             })
         .collect();
     let mut iterations = 0;
     while let Some((fact, z, gz, entailers)) = frontier.pop() {
@@ -93,18 +96,26 @@ pub fn gradient_step<T>(program: &Program<T>,
                     gv_last = gv;
                 }
             }
-            let old_adjustment = apparent_fact_adjustments.get(&fact).cloned().unwrap_or_else(|| T::zero());
+            let old_adjustment = apparent_fact_adjustments
+                .get(&fact)
+                .cloned()
+                .unwrap_or_else(|| T::zero());
             let new_adjustment = T::sum(&gz, &old_adjustment);
             apparent_fact_adjustments.set(fact, new_adjustment);
         } else {
-            let old_adjustment = latent_fact_adjustments.get(&fact).cloned().unwrap_or_else(|| T::zero());
+            let old_adjustment = latent_fact_adjustments
+                .get(&fact)
+                .cloned()
+                .unwrap_or_else(|| T::zero());
             let new_adjustment = T::sum(&gz, &old_adjustment);
             latent_fact_adjustments.set(fact, new_adjustment);
         }
     }
 }
 
-pub struct Adjustment<T> where T: TruthValue {
+pub struct Adjustment<T>
+    where T: TruthValue
+{
     pub clause_adjustments: Vec<T::Dual>,
     pub apparent_fact_adjustments: FactTable<T>,
     pub latent_fact_adjustments: FactTable<T>,
@@ -114,7 +125,10 @@ pub struct Adjustment<T> where T: TruthValue {
 pub fn compute_adjustments<T>(program: &Program<T>,
                               facts: &FactTable<T>,
                               samples: &Vec<(FactTable<T>, FactTable<T>)>,
-                              max_iters: usize) -> Adjustment<T> where T: TruthValue {
+                              max_iters: usize)
+                              -> Adjustment<T>
+    where T: TruthValue
+{
     let mut clause_adjustments = vec![T::dual_zero(); program.clauses.len()];
     let mut latent_fact_adjustments: FactTable<T> = FactTable::new();
     let mut apparent_fact_adjustments: FactTable<T> = FactTable::new();
@@ -133,41 +147,32 @@ pub fn compute_adjustments<T>(program: &Program<T>,
                       max_iters);
     }
     return Adjustment {
-        clause_adjustments: clause_adjustments,
-        apparent_fact_adjustments: apparent_fact_adjustments,
-        latent_fact_adjustments: latent_fact_adjustments,
-    };
+               clause_adjustments: clause_adjustments,
+               apparent_fact_adjustments: apparent_fact_adjustments,
+               latent_fact_adjustments: latent_fact_adjustments,
+           };
 }
 
 #[cfg(test)]
 mod tests {
+    use super::compute_adjustments;
+    use fact_table::FactTable;
+    use program::Program;
     use truth_value::{MaxFloat64, MaxFloat64Dual};
-    use super::{compute_adjustments};
-    use program::{Program};
-    use types::{Clause, Term, Literal, Fact};
-    use fact_table::{FactTable};
+    use types::{Clause, Fact, Literal, Term};
 
     #[test]
     fn maximizes_good_weight_in_single_clause() {
         let mut prg = Program::new();
         // b(X) :- a(X)
         // Where a is predicate 0, b is predicate 1, and X is variable 0.
-        prg.clauses.push(Clause::new_from_vec(
-            Literal::new_from_vec(1, vec![
-                Term::Variable(0)
-            ]),
-            vec![
-                Literal::new_from_vec(0, vec![
-                    Term::Variable(0)
-                ])
-            ])
-        );
+        prg.clauses
+            .push(Clause::new_from_vec(Literal::new_from_vec(1, vec![Term::Variable(0)]),
+                                       vec![Literal::new_from_vec(0, vec![Term::Variable(0)])]));
         prg.clause_weights.push(MaxFloat64Dual(0.0));
         let mut facts = FactTable::<MaxFloat64>::new();
         // a(2)
-        let input_fact = Fact::new_from_vec(0, vec![
-            2
-        ]);
+        let input_fact = Fact::new_from_vec(0, vec![2]);
         facts.add_fact(input_fact.clone(), MaxFloat64(1.0));
         // We expect b(2) to be added to the FactTable.
         let mut expected = FactTable::<MaxFloat64>::new();
@@ -187,27 +192,13 @@ mod tests {
         // a(X) :- b(X)
         // b(X) :- c(X)
         // Where a is predicate 0, b is predicate 1, c is predicate 2, and X is variable 0.
-        prg.clauses.push(Clause::new_from_vec(
-            Literal::new_from_vec(0, vec![
-                Term::Variable(0)
-            ]),
-            vec![
-                Literal::new_from_vec(1, vec![
-                    Term::Variable(0)
-                ])
-            ])
-        );
+        prg.clauses
+            .push(Clause::new_from_vec(Literal::new_from_vec(0, vec![Term::Variable(0)]),
+                                       vec![Literal::new_from_vec(1, vec![Term::Variable(0)])]));
         prg.clause_weights.push(MaxFloat64Dual(0.1));
-        prg.clauses.push(Clause::new_from_vec(
-            Literal::new_from_vec(1, vec![
-                Term::Variable(0)
-            ]),
-            vec![
-                Literal::new_from_vec(2, vec![
-                    Term::Variable(0)
-                ])
-            ])
-        );
+        prg.clauses
+            .push(Clause::new_from_vec(Literal::new_from_vec(1, vec![Term::Variable(0)]),
+                                       vec![Literal::new_from_vec(2, vec![Term::Variable(0)])]));
         prg.clause_weights.push(MaxFloat64Dual(0.1));
         let mut facts = FactTable::<MaxFloat64>::new();
         // c(2)

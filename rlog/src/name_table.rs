@@ -1,4 +1,4 @@
-use std::collections::hash_map::{HashMap};
+use std::collections::hash_map::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct NameTable {
@@ -46,7 +46,7 @@ impl NameTable {
 
 #[cfg(test)]
 mod tests {
-    use super::{NameTable};
+    use super::NameTable;
 
     #[test]
     fn get_names() {

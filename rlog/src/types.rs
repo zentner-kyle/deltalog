@@ -1,4 +1,4 @@
-use name_table::{NameTable};
+use name_table::NameTable;
 
 use std::fmt;
 
@@ -102,7 +102,11 @@ impl Clause {
         return max;
     }
 
-    pub fn format(&self, f: &mut fmt::Formatter, var_names: &NameTable, pred_names: &NameTable) -> Result<(), fmt::Error> {
+    pub fn format(&self,
+                  f: &mut fmt::Formatter,
+                  var_names: &NameTable,
+                  pred_names: &NameTable)
+                  -> Result<(), fmt::Error> {
         if let Some(ref head) = self.head {
             head.format(f, var_names, pred_names)?;
             write!(f, " :- ")?;
@@ -144,7 +148,7 @@ impl Literal {
             match term {
                 Term::Constant(cst) => {
                     terms.push(cst);
-                },
+                }
                 Term::Variable(_) => {
                     panic!("Literal::to_fact() called with Literal containing variables.");
                 }
@@ -153,7 +157,11 @@ impl Literal {
         Fact::new_from_vec(self.predicate, terms)
     }
 
-    pub fn format(&self, f: &mut fmt::Formatter, var_names: &NameTable, pred_names: &NameTable) -> Result<(), fmt::Error> {
+    pub fn format(&self,
+                  f: &mut fmt::Formatter,
+                  var_names: &NameTable,
+                  pred_names: &NameTable)
+                  -> Result<(), fmt::Error> {
         if let Some(name) = pred_names.get_name(self.predicate) {
             write!(f, "{}(", name)?;
         } else {
@@ -213,7 +221,7 @@ impl Term {
         match self {
             &Term::Constant(cst) => {
                 write!(f, "{}", cst)?;
-            },
+            }
             &Term::Variable(var) => {
                 if let Some(name) = var_names.get_name(var) {
                     write!(f, "{}", name)?;

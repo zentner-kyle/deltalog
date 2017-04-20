@@ -1,22 +1,28 @@
 
+use fact_table::FactTable;
+use program::Program;
 use rand;
-use std::collections::hash_map::{HashMap, Entry};
-use types::{Predicate, Constant, Literal, Clause, TermIndex, Term};
-use fact_table::{FactTable};
-use truth_value::{TruthValue};
-use program::{Program};
 use std::cmp;
+use std::collections::hash_map::{Entry, HashMap};
 use std::fmt;
+use truth_value::TruthValue;
+use types::{Clause, Constant, Literal, Predicate, Term, TermIndex};
 
-pub struct Generator<R> where R: rand::Rng {
+pub struct Generator<R>
+    where R: rand::Rng
+{
     rng: R,
     max_predicate: Predicate,
     num_terms: HashMap<Predicate, usize>,
     max_constant: HashMap<(Predicate, TermIndex), Constant>,
 }
 
-impl<R> Generator<R> where R: rand::Rng {
-    pub fn new<T>(rng: R, facts: &FactTable<T>, program: &Program<T>) -> Self where T: TruthValue {
+impl<R> Generator<R>
+    where R: rand::Rng
+{
+    pub fn new<T>(rng: R, facts: &FactTable<T>, program: &Program<T>) -> Self
+        where T: TruthValue
+    {
         let max_predicate = program.predicate_names.len();
         let max_constant = HashMap::new();
         let mut result = Generator {
@@ -29,18 +35,22 @@ impl<R> Generator<R> where R: rand::Rng {
         return result;
     }
 
-    pub fn update_num_terms<T>(&mut self, program: &Program<T>) where T: TruthValue {
+    pub fn update_num_terms<T>(&mut self, program: &Program<T>)
+        where T: TruthValue
+    {
         self.num_terms = program.predicate_num_terms.clone();
     }
 
-    pub fn update_max_constant<T>(&mut self, facts: &FactTable<T>) where T: TruthValue {
+    pub fn update_max_constant<T>(&mut self, facts: &FactTable<T>)
+        where T: TruthValue
+    {
         for (fact, _) in facts.all_facts_iter() {
             for (index, &constant) in fact.terms.iter().enumerate() {
                 match self.max_constant.entry((fact.predicate, index)) {
                     Entry::Occupied(mut pair) => {
                         let old_val = *pair.get();
                         pair.insert(cmp::max(old_val, constant));
-                    },
+                    }
                     Entry::Vacant(pair) => {
                         pair.insert(constant);
                     }
@@ -56,9 +66,11 @@ impl<R> Generator<R> where R: rand::Rng {
 
     fn gen_constant(&mut self, predicate: Predicate, term_index: usize) -> Constant {
         // Might want to increase by one.
-        let max_constant = 1 + self.max_constant.get(&(predicate, term_index))
-            .cloned()
-            .unwrap_or(0usize);
+        let max_constant = 1 +
+                           self.max_constant
+                               .get(&(predicate, term_index))
+                               .cloned()
+                               .unwrap_or(0usize);
         // Want inclusive range.
         self.rng.gen_range(0, 1 + max_constant)
     }
@@ -66,9 +78,7 @@ impl<R> Generator<R> where R: rand::Rng {
     fn get_num_terms(&mut self, predicate: Predicate, max_new: usize) -> usize {
 
         match self.num_terms.entry(predicate) {
-            Entry::Occupied(pair) => {
-                *pair.get()
-            },
+            Entry::Occupied(pair) => *pair.get(),
             Entry::Vacant(pair) => {
                 let n = self.rng.gen_range(0, 1 + max_new);
                 pair.insert(n);
@@ -91,12 +101,12 @@ impl<R> Generator<R> where R: rand::Rng {
         let mut head_terms = Vec::with_capacity(num_terms);
         for (term_index, num_remaining_output_terms) in (1..(1 + num_terms)).rev().enumerate() {
             // If every remaining output term must be filled.
-            let prob_should_use_output_variable = 
-                num_remaining_output_variables as f64 / num_remaining_output_terms as f64;
+            let prob_should_use_output_variable = num_remaining_output_variables as f64 /
+                                                  num_remaining_output_terms as f64;
             // TODO(zentner): This never uses the same output variable multiple times, which is
             // valid.
             let next_output_variable = num_output_variables - num_remaining_output_variables;
-            if self.rng.next_f64() <= prob_should_use_output_variable  {
+            if self.rng.next_f64() <= prob_should_use_output_variable {
                 head_terms.push(Term::Variable(next_output_variable));
                 num_remaining_output_variables -= 1;
             } else {
@@ -112,7 +122,8 @@ impl<R> Generator<R> where R: rand::Rng {
         let (head, num_output_variables) = self.gen_head(max_new_predicate_terms);
         let body_len = self.rng.gen_range(1, 1 + max_body_len);
         let mut body = Vec::with_capacity(body_len);
-        let mut unused_output_variables: Vec<_> = (0..num_output_variables).map(|v| Some(v)).collect();
+        let mut unused_output_variables: Vec<_> =
+            (0..num_output_variables).map(|v| Some(v)).collect();
         self.rng.shuffle(&mut unused_output_variables);
         let mut num_unused_output_variables = num_output_variables;
         let mut num_variables = num_output_variables;
@@ -131,9 +142,9 @@ impl<R> Generator<R> where R: rand::Rng {
             let mut terms = Vec::with_capacity(num_terms);
             for term_index in 0..num_terms {
                 // If every remaining output term must be filled.
-                let prob_should_use_output_variable = 
-                    num_unused_output_variables as f64 / num_remaining_output_terms as f64;
-                if self.rng.next_f64() <= prob_should_use_output_variable  {
+                let prob_should_use_output_variable = num_unused_output_variables as f64 /
+                                                      num_remaining_output_terms as f64;
+                if self.rng.next_f64() <= prob_should_use_output_variable {
                     let output_variable;
                     loop {
                         if let Some(variable) = unused_output_variables.pop().unwrap() {
@@ -154,8 +165,8 @@ impl<R> Generator<R> where R: rand::Rng {
                         if variable < num_output_variables {
                             // Mark the corresponding output variable as used.
                             if let Some(index) = unused_output_variables
-                                    .iter()
-                                    .position(|&v| v == Some(variable)) {
+                                   .iter()
+                                   .position(|&v| v == Some(variable)) {
                                 unused_output_variables[index] = None;
                                 num_unused_output_variables -= 1;
                             }
@@ -173,19 +184,24 @@ impl<R> Generator<R> where R: rand::Rng {
     }
 }
 
-impl<R> fmt::Debug for Generator<R> where R: rand::Rng {
+impl<R> fmt::Debug for Generator<R>
+    where R: rand::Rng
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "Generator {{ rng: *, max_predicate: {:?}, num_terms: {:?}, max_constant: {:?} }}",
-               self.max_predicate, self.num_terms, self.max_constant)
+        write!(f,
+               "Generator {{ rng: *, max_predicate: {:?}, num_terms: {:?}, max_constant: {:?} }}",
+               self.max_predicate,
+               self.num_terms,
+               self.max_constant)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Generator};
-    use parser::{program};
-    use rand::XorShiftRng;
+    use super::Generator;
+    use parser::program;
     use rand::SeedableRng;
+    use rand::XorShiftRng;
 
     #[test]
     fn can_generate_a_clause() {
@@ -194,7 +210,9 @@ mod tests {
         a(0).
         a(1).
         a(X) :- b(X)
-        "#).unwrap().0;
+        "#)
+                .unwrap()
+                .0;
         let mut generator = Generator::new(rng, &facts, &program);
         println!("generated_clause = {:?}", generator.gen_clause(4, 8));
         println!("generated_clause = {:?}", generator.gen_clause(100, 8));

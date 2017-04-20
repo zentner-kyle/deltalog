@@ -16,11 +16,13 @@ mod refine;
 mod reconstrain;
 pub mod truth_value;
 
-use rand::{Rng, thread_rng, XorShiftRng};
-use fact_table::{FactTable};
-use refine::{Refiner};
+use fact_table::FactTable;
+use rand::{Rng, XorShiftRng, thread_rng};
+use refine::Refiner;
 
-pub struct Context<T> where T: truth_value::TruthValue {
+pub struct Context<T>
+    where T: truth_value::TruthValue
+{
     facts: fact_table::FactTable<T>,
     program: program::Program<T>,
     samples: Vec<(FactTable<T>, FactTable<T>)>,
@@ -28,36 +30,34 @@ pub struct Context<T> where T: truth_value::TruthValue {
 
 #[derive(Debug)]
 pub enum Error<'a> {
-    Internal {
-    },
-    SourceMsg {
-        msg: &'static str,
-        source: &'a str,
-    },
+    Internal {},
+    SourceMsg { msg: &'static str, source: &'a str },
 }
 
 pub type Result<'a, T> = std::result::Result<T, Error<'a>>;
 
 const STEP_ITERATIONS: usize = 1000000000usize;
 
-impl<T> Context<T> where T: truth_value::TruthValue {
+impl<T> Context<T>
+    where T: truth_value::TruthValue
+{
     pub fn new_from_source(source: &str) -> Result<Self> {
         parser::program(source)
-            .map(|((facts, program, samples), _)| Context {
-                facts: facts,
-                program: program,
-                samples: samples,
-            })
-            .map_err(|e| {
-                match e {
-                    parser::Error::Msg{msg, rest} => {
-                        Error::SourceMsg{
-                            msg: msg,
-                            source: rest,
-                        }
-                    }
-                }
-            })
+            .map(|((facts, program, samples), _)| {
+                     Context {
+                         facts: facts,
+                         program: program,
+                         samples: samples,
+                     }
+                 })
+            .map_err(|e| match e {
+                         parser::Error::Msg { msg, rest } => {
+                             Error::SourceMsg {
+                                 msg: msg,
+                                 source: rest,
+                             }
+                         }
+                     })
     }
 
     pub fn facts_as_string(&mut self) -> String {
@@ -74,18 +74,23 @@ impl<T> Context<T> where T: truth_value::TruthValue {
 
     pub fn optimize(&mut self, learning_rate: f64, iterations: usize) {
         for _ in 0..iterations {
-            let res = optimize::compute_adjustments(&self.program, &self.facts, &self.samples, STEP_ITERATIONS);
+            let res = optimize::compute_adjustments(&self.program,
+                                                    &self.facts,
+                                                    &self.samples,
+                                                    STEP_ITERATIONS);
             for (clause_idx, adjustment) in res.clause_adjustments.iter().enumerate() {
-                T::dual_adjust(&mut self.program.clause_weights[clause_idx], adjustment, learning_rate);
+                T::dual_adjust(&mut self.program.clause_weights[clause_idx],
+                               adjustment,
+                               learning_rate);
             }
         }
     }
 
     pub fn refine(&mut self, iterations: usize) {
         let mut refiner = Refiner::new(thread_rng().gen::<XorShiftRng>(),
-            self.facts.clone(),
-            self.program.clone(),
-            self.samples.clone());
+                                       self.facts.clone(),
+                                       self.program.clone(),
+                                       self.samples.clone());
         refiner.iterate(iterations);
         self.program = refiner.to_program();
     }

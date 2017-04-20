@@ -1,20 +1,18 @@
-use std;
-use unicode_xid::UnicodeXID;
-use program::{Program};
-use name_table::{NameTable};
-use fact_table::{FactTable};
-use std::str::{FromStr};
-use truth_value::{TruthValue};
-use std::collections::hash_map::{HashMap, Entry};
 
-use types::{Term, Literal, Clause, Constant, Fact, Predicate};
+use fact_table::FactTable;
+use name_table::NameTable;
+use program::Program;
+use std;
+use std::collections::hash_map::{Entry, HashMap};
+use std::str::FromStr;
+use truth_value::TruthValue;
+
+use types::{Clause, Constant, Fact, Literal, Predicate, Term};
+use unicode_xid::UnicodeXID;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Error<'a> {
-    Msg {
-        msg: &'static str,
-        rest: &'a str,
-    }
+    Msg { msg: &'static str, rest: &'a str },
 }
 
 pub type Result<'a, T> = std::result::Result<(T, &'a str), Error<'a>>;
@@ -31,12 +29,10 @@ fn err_from_str<'a>(msg: &'static str, rest: &'a str) -> Error<'a> {
 }
 
 
-fn some_char_is<F>(opt_char: Option<char>, f: F) -> bool where F: Fn(char) -> bool {
-    if let Some(c) = opt_char {
-        f(c)
-    } else {
-        false
-    }
+fn some_char_is<F>(opt_char: Option<char>, f: F) -> bool
+    where F: Fn(char) -> bool
+{
+    if let Some(c) = opt_char { f(c) } else { false }
 }
 
 fn substr_index(src: &str, substr: &str) -> usize {
@@ -53,7 +49,9 @@ fn slice_src<'a>(src: &'a str, rest: &'a str) -> &'a str {
     src.split_at(index).0
 }
 
-fn character_is<F>(src: &str, f: F) -> Result<char> where F: Fn(char) -> bool {
+fn character_is<F>(src: &str, f: F) -> Result<char>
+    where F: Fn(char) -> bool
+{
     let mut cs = src.chars();
     let c = cs.next();
     if some_char_is(c, f) {
@@ -70,7 +68,8 @@ fn character(src: &str, c: char) -> Result<char> {
 
 fn start_and_continue<F, G>(src: &str, f: F, g: G) -> Result<&str>
     where F: Fn(char) -> bool,
-          G: Fn(char) -> bool {
+          G: Fn(char) -> bool
+{
     let mut rest;
     let mut cs = src.chars();
     if some_char_is(cs.next(), f) {
@@ -119,13 +118,15 @@ fn char_is_not_uppercase(c: char) -> bool {
 }
 
 fn lowercase_identifier(src: &str) -> Result<&str> {
-    start_and_continue(src, |c| UnicodeXID::is_xid_start(c) && char_is_not_uppercase(c),
-    UnicodeXID::is_xid_continue)
+    start_and_continue(src,
+                       |c| UnicodeXID::is_xid_start(c) && char_is_not_uppercase(c),
+                       UnicodeXID::is_xid_continue)
 }
 
 fn uppercase_identifier(src: &str) -> Result<&str> {
-    start_and_continue(src, |c| UnicodeXID::is_xid_start(c) && !char_is_not_uppercase(c),
-    UnicodeXID::is_xid_continue)
+    start_and_continue(src,
+                       |c| UnicodeXID::is_xid_start(c) && !char_is_not_uppercase(c),
+                       UnicodeXID::is_xid_continue)
 }
 
 fn skip_whitespace(src: &str) -> &str {
@@ -174,7 +175,11 @@ fn terms<'a, 'b>(src: &'a str, var_names: &'b mut NameTable) -> Result<'a, Vec<T
     }
 }
 
-fn literal<'a, 'b, 'c>(src: &'a str, var_names: &'b mut NameTable, predicate_names: &'b mut NameTable, num_terms: &'c mut HashMap<Predicate, usize>) -> Result<'a, Literal> {
+fn literal<'a, 'b, 'c>(src: &'a str,
+                       var_names: &'b mut NameTable,
+                       predicate_names: &'b mut NameTable,
+                       num_terms: &'c mut HashMap<Predicate, usize>)
+                       -> Result<'a, Literal> {
     let mut rest = src;
     rest = skip_whitespace(rest);
     let (predicate_name, r) = lowercase_identifier(rest)?;
@@ -190,15 +195,16 @@ fn literal<'a, 'b, 'c>(src: &'a str, var_names: &'b mut NameTable, predicate_nam
     if correct_num_terms(num_terms, predicate, ts.len()) {
         return Ok((Literal::new_from_vec(predicate, ts), rest));
     } else {
-        return err_msg("Wrong number of terms in literal", src)
+        return err_msg("Wrong number of terms in literal", src);
     }
 }
 
-fn correct_num_terms<'a>(num_terms: &'a mut HashMap<Predicate, usize>, predicate: Predicate, new_num_terms: usize) -> bool {
+fn correct_num_terms<'a>(num_terms: &'a mut HashMap<Predicate, usize>,
+                         predicate: Predicate,
+                         new_num_terms: usize)
+                         -> bool {
     match num_terms.entry(predicate) {
-        Entry::Occupied(pair) => {
-            *pair.get() == new_num_terms
-        },
+        Entry::Occupied(pair) => *pair.get() == new_num_terms,
         Entry::Vacant(pair) => {
             pair.insert(new_num_terms);
             true
@@ -244,7 +250,11 @@ fn fact<'a, 'b>(src: &'a str, predicate_names: &'b mut NameTable) -> Result<'a, 
     return Ok((Fact::new_from_vec(predicate, ts), rest));
 }
 
-fn fact_list<'a, 'b, T>(src: &'a str, predicate_names: &'b mut NameTable) -> Result<'a, FactTable<T>> where T: TruthValue {
+fn fact_list<'a, 'b, T>(src: &'a str,
+                        predicate_names: &'b mut NameTable)
+                        -> Result<'a, FactTable<T>>
+    where T: TruthValue
+{
     let mut rest = src;
     let mut results = FactTable::new();
     loop {
@@ -264,7 +274,9 @@ fn fact_list<'a, 'b, T>(src: &'a str, predicate_names: &'b mut NameTable) -> Res
     }
 }
 
-pub fn weight<T>(source: &str) -> Result<T::Dual> where T: TruthValue {
+pub fn weight<T>(source: &str) -> Result<T::Dual>
+    where T: TruthValue
+{
     let mut rest = source;
     rest = prefix(rest, "weight")?.1;
     rest = skip_whitespace(rest);
@@ -280,7 +292,9 @@ pub fn weight<T>(source: &str) -> Result<T::Dual> where T: TruthValue {
     }
 }
 
-pub fn confidence<T>(source: &str) -> Result<T> where T: TruthValue {
+pub fn confidence<T>(source: &str) -> Result<T>
+    where T: TruthValue
+{
     let mut rest = source;
     rest = prefix(rest, "confidence")?.1;
     rest = skip_whitespace(rest);
@@ -296,7 +310,11 @@ pub fn confidence<T>(source: &str) -> Result<T> where T: TruthValue {
     }
 }
 
-pub fn sample<'a, 'b, T>(source: &'a str, predicate_names: &'b mut NameTable) -> Result<'a, (FactTable<T>, FactTable<T>)> where T: TruthValue {
+pub fn sample<'a, 'b, T>(source: &'a str,
+                         predicate_names: &'b mut NameTable)
+                         -> Result<'a, (FactTable<T>, FactTable<T>)>
+    where T: TruthValue
+{
     let mut rest = source;
     rest = prefix(rest, "sample")?.1;
     rest = skip_whitespace(rest);
@@ -313,7 +331,10 @@ pub fn sample<'a, 'b, T>(source: &'a str, predicate_names: &'b mut NameTable) ->
 }
 
 
-pub fn program<T>(source: &str) -> Result<(FactTable<T>, Program<T>, Vec<(FactTable<T>, FactTable<T>)>)> where T: TruthValue {
+pub fn program<T>(source: &str)
+                  -> Result<(FactTable<T>, Program<T>, Vec<(FactTable<T>, FactTable<T>)>)>
+    where T: TruthValue
+{
     let mut rest = source;
     let mut facts = FactTable::new();
     let mut program = Program::new();
@@ -328,8 +349,12 @@ pub fn program<T>(source: &str) -> Result<(FactTable<T>, Program<T>, Vec<(FactTa
         }
         let start_of_clause = rest;
         if let Ok((sample, r)) = sample(rest, &mut program.predicate_names) {
-            program.check_num_fact_terms(&sample.0).map_err(|s| err_from_str(s, rest))?;
-            program.check_num_fact_terms(&sample.1).map_err(|s| err_from_str(s, rest))?;
+            program
+                .check_num_fact_terms(&sample.0)
+                .map_err(|s| err_from_str(s, rest))?;
+            program
+                .check_num_fact_terms(&sample.1)
+                .map_err(|s| err_from_str(s, rest))?;
             rest = r;
             samples.push(sample);
             continue;
@@ -345,9 +370,12 @@ pub fn program<T>(source: &str) -> Result<(FactTable<T>, Program<T>, Vec<(FactTa
             current_confidence = confidence;
         }
         let mut var_names = NameTable::new();
-        let (head, r) = literal(rest, &mut var_names, &mut program.predicate_names, &mut program.predicate_num_terms)
-            .map(|(lit, r)| (Some(lit), r))
-            .or_else(|_| character(rest, '?').map(|(_, r)| (None, r)))?;
+        let (head, r) = literal(rest,
+                                &mut var_names,
+                                &mut program.predicate_names,
+                                &mut program.predicate_num_terms)
+                .map(|(lit, r)| (Some(lit), r))
+                .or_else(|_| character(rest, '?').map(|(_, r)| (None, r)))?;
         rest = r;
         rest = skip_whitespace(rest);
         if let Ok((_, r)) = prefix(rest, ":-") {
@@ -355,7 +383,10 @@ pub fn program<T>(source: &str) -> Result<(FactTable<T>, Program<T>, Vec<(FactTa
             let mut literals = Vec::new();
             rest = skip_whitespace(rest);
             loop {
-                let (lit, r) = literal(rest, &mut var_names, &mut program.predicate_names, &mut program.predicate_num_terms)?;
+                let (lit, r) = literal(rest,
+                                       &mut var_names,
+                                       &mut program.predicate_names,
+                                       &mut program.predicate_num_terms)?;
                 rest = r;
                 literals.push(lit);
                 rest = skip_whitespace(rest);
@@ -370,7 +401,9 @@ pub fn program<T>(source: &str) -> Result<(FactTable<T>, Program<T>, Vec<(FactTa
                 body: literals,
             };
             if clause.is_valid() {
-                program.clause_variable_names.insert(program.clauses.len(), var_names);
+                program
+                    .clause_variable_names
+                    .insert(program.clauses.len(), var_names);
                 program.clauses.push(clause);
                 program.clause_weights.push(current_weight.clone());
             } else {
@@ -381,7 +414,9 @@ pub fn program<T>(source: &str) -> Result<(FactTable<T>, Program<T>, Vec<(FactTa
                 return err_msg("Fact contained variables", start_of_clause);
             }
             let fact = lit.to_fact();
-            program.check_num_single_fact_terms(&fact).map_err(|s| err_from_str(s, rest))?;
+            program
+                .check_num_single_fact_terms(&fact)
+                .map_err(|s| err_from_str(s, rest))?;
             facts.add_fact(fact, current_confidence.clone());
             rest = r;
         }
@@ -390,11 +425,11 @@ pub fn program<T>(source: &str) -> Result<(FactTable<T>, Program<T>, Vec<(FactTa
 
 #[cfg(test)]
 mod tests {
-    use super::{unsigned_decimal_integer, character_is, lowercase_identifier, uppercase_identifier,
-    terms, prefix, literal, program};
-    use types::{Term, Literal};
-    use name_table::{NameTable};
-    use std::collections::hash_map::{HashMap};
+    use super::{character_is, literal, lowercase_identifier, prefix, program, terms,
+                unsigned_decimal_integer, uppercase_identifier};
+    use name_table::NameTable;
+    use std::collections::hash_map::HashMap;
+    use types::{Literal, Term};
 
     #[test]
     fn parse_characters() {
@@ -422,7 +457,8 @@ mod tests {
         assert_eq!(lowercase_identifier("aB").unwrap().0, "aB");
         assert_eq!(lowercase_identifier("a1").unwrap().0, "a1");
         assert!(lowercase_identifier("_a").is_err());
-        assert_eq!(lowercase_identifier("test_identifier").unwrap().0, "test_identifier");
+        assert_eq!(lowercase_identifier("test_identifier").unwrap().0,
+                   "test_identifier");
         assert_eq!(lowercase_identifier("test_identifier").unwrap().1, "");
     }
 
@@ -435,7 +471,8 @@ mod tests {
         assert!(uppercase_identifier("a").is_err());
         assert!(uppercase_identifier("aB").is_err());
         assert!(uppercase_identifier("Ba").is_ok());
-        assert_eq!(uppercase_identifier("Test_identifier").unwrap().0, "Test_identifier");
+        assert_eq!(uppercase_identifier("Test_identifier").unwrap().0,
+                   "Test_identifier");
         assert_eq!(uppercase_identifier("Test_identifier").unwrap().1, "");
     }
 
@@ -469,11 +506,23 @@ mod tests {
         let mut pred_names = NameTable::new();
         let mut num_terms = HashMap::new();
         assert!(literal("a(0)", &mut var_names, &mut pred_names, &mut num_terms).is_ok());
-        assert!(literal("b(0, 1, X, Y)", &mut var_names, &mut pred_names, &mut num_terms).is_ok());
+        assert!(literal("b(0, 1, X, Y)",
+                        &mut var_names,
+                        &mut pred_names,
+                        &mut num_terms)
+                        .is_ok());
         assert_eq!(var_names.get("Y"), 1);
         assert_eq!(pred_names.get("b"), 1);
-        assert_eq!(literal("c(1, X, Y)", &mut var_names, &mut pred_names, &mut num_terms).unwrap().0,
-        Literal::new_from_vec(2, vec![Term::Constant(1), Term::Variable(0), Term::Variable(1)]));
+        assert_eq!(literal("c(1, X, Y)",
+                           &mut var_names,
+                           &mut pred_names,
+                           &mut num_terms)
+                           .unwrap()
+                           .0,
+                   Literal::new_from_vec(2,
+                                         vec![Term::Constant(1),
+                                              Term::Variable(0),
+                                              Term::Variable(1)]));
     }
 
     #[test]

@@ -1,13 +1,17 @@
 use fact_table::FactTable;
 use optimize::Adjustment;
 use program::Program;
+use rand::Rng;
+use std::cmp::{Ordering, PartialOrd};
 use std::collections::hash_map::{Entry, HashMap};
 use truth_value::TruthValue;
 use types::{Constant, Predicate, TermIndex};
+use util::cumulative_sum;
 
 #[allow(dead_code)]
 struct ConstraintMeasure {
     weight_per_predicate: Vec<f64>,
+    cumulative_weight_per_predicate: Vec<f64>,
     unconstraint_demand: HashMap<(Predicate, TermIndex), f64>,
     // TODO(zentner): Add constraint_demand.
 }
@@ -68,8 +72,31 @@ fn compute_term_overconstraint<T>(program: &Program<T>,
             }
         }
     }
+    let mut cumulative_weight_per_predicate = weight_per_predicate.clone();
+
+    cumulative_sum(&mut cumulative_weight_per_predicate);
     return ConstraintMeasure {
                weight_per_predicate: weight_per_predicate,
+               cumulative_weight_per_predicate: cumulative_weight_per_predicate,
                unconstraint_demand: unconstraint_demand,
            };
+}
+
+impl ConstraintMeasure {
+    #[allow(dead_code)]
+    pub fn choose_predicate<R>(&self, rng: &mut R) -> Predicate
+        where R: Rng
+    {
+        let cum_w = &self.cumulative_weight_per_predicate;
+        let max_cum_weight = cum_w[cum_w.len() - 1];
+        let target_cum_weight = max_cum_weight as f64 * rng.next_f64();
+        match cum_w.binary_search_by(|w| {
+                                         target_cum_weight
+                                             .partial_cmp(w)
+                                             .unwrap_or(Ordering::Equal)
+                                     }) {
+            Ok(index) => index,
+            Err(index) => index,
+        }
+    }
 }

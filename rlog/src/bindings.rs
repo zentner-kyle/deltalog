@@ -1,6 +1,5 @@
 use std::iter;
 use truth_value::TruthValue;
-
 use types::{Constant, Fact, Literal, Term};
 
 #[derive(Clone, Copy, Debug, PartialEq, Hash)]

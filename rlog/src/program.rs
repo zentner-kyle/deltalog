@@ -1,10 +1,8 @@
-
 use fact_table::FactTable;
 use name_table::NameTable;
 use std::collections::hash_map::{Entry, HashMap};
 use std::fmt;
 use truth_value::TruthValue;
-
 use types::{Clause, ClauseIndex, Fact, Literal, Predicate};
 
 #[derive(Debug, Clone)]

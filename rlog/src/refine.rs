@@ -1,4 +1,3 @@
-
 use bottom_up::evaluate_bottom_up;
 use fact_table::FactTable;
 use generate::Generator;

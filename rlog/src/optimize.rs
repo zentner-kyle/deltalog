@@ -1,9 +1,7 @@
-
 use bottom_up::evaluate_bottom_up;
 use fact_table::FactTable;
 use program::Program;
 use std::collections::hash_set::HashSet;
-
 use truth_value::TruthValue;
 
 /// The following math probably needs to be cleaned up in a variety of ways.

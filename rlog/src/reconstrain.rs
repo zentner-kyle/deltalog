@@ -1,4 +1,3 @@
-
 use fact_table::FactTable;
 use optimize::Adjustment;
 use program::Program;
@@ -6,14 +5,12 @@ use std::collections::hash_map::{Entry, HashMap};
 use truth_value::TruthValue;
 use types::{Constant, Predicate, TermIndex};
 
-
 #[allow(dead_code)]
 struct ConstraintMeasure {
     weight_per_predicate: Vec<f64>,
     unconstraint_demand: HashMap<(Predicate, TermIndex), f64>,
     // TODO(zentner): Add constraint_demand.
 }
-
 
 fn compute_concrete_term_totals<T>(facts: &FactTable<T>)
                                    -> HashMap<(Predicate, TermIndex, Constant), T>

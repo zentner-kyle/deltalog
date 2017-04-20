@@ -36,7 +36,7 @@ pub enum Error<'a> {
 
 pub type Result<'a, T> = std::result::Result<T, Error<'a>>;
 
-const STEP_ITERATIONS: usize = 1000000000usize;
+const STEP_ITERATIONS: usize = std::usize::MAX;
 
 impl<T> Context<T>
     where T: truth_value::TruthValue

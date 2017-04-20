@@ -1,5 +1,4 @@
 use name_table::NameTable;
-
 use std::fmt;
 
 pub type Predicate = usize;

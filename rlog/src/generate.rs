@@ -1,4 +1,3 @@
-
 use fact_table::FactTable;
 use program::Program;
 use rand;

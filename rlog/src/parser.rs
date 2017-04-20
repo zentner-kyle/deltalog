@@ -1,4 +1,3 @@
-
 use fact_table::FactTable;
 use name_table::NameTable;
 use program::Program;
@@ -6,7 +5,6 @@ use std;
 use std::collections::hash_map::{Entry, HashMap};
 use std::str::FromStr;
 use truth_value::TruthValue;
-
 use types::{Clause, Constant, Fact, Literal, Predicate, Term};
 use unicode_xid::UnicodeXID;
 

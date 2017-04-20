@@ -1,5 +1,3 @@
-
-
 use bindings::Bindings;
 use name_table::NameTable;
 use std::collections::hash_map;

@@ -13,6 +13,7 @@ mod fact_table;
 mod optimize;
 mod generate;
 mod refine;
+mod reconstrain;
 pub mod truth_value;
 
 use rand::{Rng, thread_rng, XorShiftRng};

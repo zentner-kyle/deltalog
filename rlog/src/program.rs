@@ -78,6 +78,10 @@ impl<T> Program<T>
         return Ok(());
     }
 
+    pub fn get_num_terms(&self, predicate: Predicate) -> usize {
+        *self.predicate_num_terms.get(&predicate).unwrap()
+    }
+
     pub fn push_clause(&mut self,
                        clause: Clause,
                        weight: T::Dual,

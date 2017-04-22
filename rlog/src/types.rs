@@ -130,6 +130,16 @@ impl Literal {
         }
     }
 
+    pub fn num_times_variable_appears(&self, variable: Variable) -> usize {
+        self.terms
+            .iter()
+            .map(|term| match term {
+                     &Term::Variable(var) if var == variable => 1,
+                     _ => 0,
+                 })
+            .sum()
+    }
+
     pub fn contains_variable(&self, variable: Variable) -> bool {
         for term in &self.terms {
             if let &Term::Variable(var) = term {

@@ -15,6 +15,7 @@ mod generate;
 mod refine;
 mod reconstrain;
 mod util;
+mod fake_rng;
 pub mod truth_value;
 
 use fact_table::FactTable;

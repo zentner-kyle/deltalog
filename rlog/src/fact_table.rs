@@ -64,10 +64,11 @@ impl<'a, T> Iterator for CauseIter<'a, T>
     }
 }
 
+#[derive(Debug)]
 pub struct FactTableIter<'a, T: 'a>
     where T: TruthValue
 {
-    map_iter: hash_map::Iter<'a, Fact, FactRecord<T>>,
+    map_iter: Option<hash_map::Iter<'a, Fact, FactRecord<T>>>,
     literal: &'a Literal,
     bindings: Bindings<T>,
 }
@@ -77,13 +78,23 @@ impl<'a, T> Iterator for FactTableIter<'a, T>
 {
     type Item = (Bindings<T>, &'a Fact, &'a T);
     fn next(&mut self) -> Option<Self::Item> {
-        while let Some((fact, record)) = self.map_iter.next() {
-            let truth = &record.truth;
-            if let Some(bindings) = self.bindings.refine(self.literal, fact, truth) {
-                return Some((bindings, fact, truth));
+        if let Some(ref mut map_iter) = self.map_iter {
+            while let Some((fact, record)) = map_iter.next() {
+                let truth = &record.truth;
+                if let Some(bindings) = self.bindings.refine(self.literal, fact, truth) {
+                    return Some((bindings, fact, truth));
+                }
             }
         }
         return None;
+    }
+}
+
+impl<'a, T> FactTableIter<'a, T>
+    where T: TruthValue
+{
+    pub fn into_bindings(self) -> Bindings<T> {
+        self.bindings
     }
 }
 
@@ -129,6 +140,11 @@ impl<T> FactTable<T>
         FactTable { maps: Vec::new() }
     }
 
+    #[allow(dead_code)]
+    pub fn len(&self) -> usize {
+        self.maps.iter().map(|m| m.len()).sum()
+    }
+
     pub fn extend_num_predicates(&mut self, predicate: Predicate) {
         if predicate >= self.maps.len() {
             let difference = 1 + predicate - self.maps.len();
@@ -155,7 +171,7 @@ impl<T> FactTable<T>
               'b: 'c
     {
         FactTableIter::<'c, T> {
-            map_iter: self.maps[literal.predicate].iter(),
+            map_iter: self.maps.get(literal.predicate).map(|m| m.iter()),
             literal: literal,
             bindings: bindings,
         }
@@ -240,15 +256,10 @@ impl<T> FactTable<T>
         self.maps[fact.predicate].get(fact).map(|r| &r.truth)
     }
 
-    #[allow(dead_code)]
-    pub fn get_causes<'a>(&'a mut self, fact: &Fact) -> Option<CauseIter<'a, T>> {
-        self.extend_num_predicates(fact.predicate);
-        self.get_causes_unmut(fact)
-    }
-
-    pub fn get_causes_unmut<'a>(&'a self, fact: &Fact) -> Option<CauseIter<'a, T>> {
-        self.maps[fact.predicate]
-            .get(fact)
+    pub fn get_causes<'a>(&'a self, fact: &Fact) -> Option<CauseIter<'a, T>> {
+        self.maps
+            .get(fact.predicate)
+            .and_then(|m| m.get(fact))
             .map(|r| CauseIter { inner: r.bindings_set.iter() })
     }
 

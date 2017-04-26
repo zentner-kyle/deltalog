@@ -41,14 +41,28 @@ impl Clause {
     }
 
     pub fn is_valid(&self) -> bool {
-        // TODO(zentner): num_variables() assumes validity!
-        for var in 0..self.num_variables() {
+        for var in 0..self.num_output_variables() {
             if !self.contains_variable_in_body(var) {
                 return false;
             }
         }
         return true;
     }
+
+    pub fn num_output_variables(&self) -> usize {
+        let mut count = 0;
+        if let Some(ref head) = self.head {
+            for term in &head.terms {
+                if let &Term::Variable(var) = term {
+                    if var + 1 > count {
+                        count = var + 1;
+                    }
+                }
+            }
+        }
+        return count;
+    }
+
 
     pub fn num_variables(&self) -> usize {
         let mut count = 0;

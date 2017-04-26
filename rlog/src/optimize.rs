@@ -63,7 +63,7 @@ pub fn gradient_step<T>(program: &Program<T>,
         } else {
             iterations += 1;
         }
-        if let Some(causes) = facts.get_causes_unmut(&fact) {
+        if let Some(causes) = facts.get_causes(&fact) {
             let mut x_last = z;
             let mut gx_last = gz.clone();
             for (clause_idx, binds) in causes {
@@ -87,7 +87,10 @@ pub fn gradient_step<T>(program: &Program<T>,
                     }
                     let mut new_entailers = entailers.clone();
                     new_entailers.insert(fact.clone());
-                    let u = facts.get_unmut(&causing_fact).unwrap().clone();
+                    let u = facts
+                        .get_unmut(&causing_fact)
+                        .cloned()
+                        .unwrap_or_else(|| T::zero());
                     let v = T::both(&v_last, &u);
                     let (gu, gv) = T::back_both(&u, &v, &gv_last);
                     frontier.push((causing_fact, u, gu, new_entailers));

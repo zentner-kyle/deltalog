@@ -1,6 +1,6 @@
 use std::iter;
 use truth_value::TruthValue;
-use types::{Constant, Fact, Literal, Term};
+use types::{Clause, Constant, Fact, Literal, Term};
 
 #[derive(Clone, Copy, Debug, PartialEq, Hash)]
 enum Binding {
@@ -75,12 +75,32 @@ impl<T> Bindings<T>
         return Some(next_binds);
     }
 
+    #[allow(dead_code)]
     pub fn all_variables_in_literal_bound(&self, literal: &Literal) -> bool {
         for term in literal.terms.iter() {
             if let &Term::Variable(var_idx) = term {
                 if let Binding::Unbound = self.bindings[var_idx] {
                     return false;
                 }
+            }
+        }
+        return true;
+    }
+
+    #[allow(dead_code)]
+    pub fn all_variables_bound(&self) -> bool {
+        for bind in &self.bindings {
+            if *bind == Binding::Unbound {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    pub fn all_variables_bound_in_clause(&self, clause: &Clause) -> bool {
+        for (variable, bind) in self.bindings.iter().enumerate() {
+            if *bind == Binding::Unbound && clause.contains_variable(variable) {
+                return false;
             }
         }
         return true;

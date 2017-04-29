@@ -2,6 +2,7 @@ use fact_table::FactTable;
 use name_table::NameTable;
 use std::collections::hash_map::{Entry, HashMap};
 use std::fmt;
+use std::slice;
 use truth_value::TruthValue;
 use types::{Clause, ClauseIndex, Fact, Literal, Predicate};
 
@@ -9,11 +10,23 @@ use types::{Clause, ClauseIndex, Fact, Literal, Predicate};
 pub struct Program<T>
     where T: TruthValue
 {
-    pub clauses: Vec<Clause>,
+    clauses: Vec<Clause>,
     pub clause_weights: Vec<T::Dual>,
     pub predicate_names: NameTable,
     pub clause_variable_names: HashMap<ClauseIndex, NameTable>,
     pub predicate_num_terms: HashMap<Predicate, usize>,
+}
+
+pub struct ClauseIter<'a> {
+    inner: slice::Iter<'a, Clause>,
+}
+
+impl<'a> Iterator for ClauseIter<'a> {
+    type Item = &'a Clause;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next()
+    }
 }
 
 impl<T> Program<T>
@@ -38,6 +51,18 @@ impl<T> Program<T>
             }
         }
         return count;
+    }
+
+    pub fn num_clauses(&self) -> usize {
+        self.clauses.len()
+    }
+
+    pub fn get_clause_by_idx(&self, clause_idx: ClauseIndex) -> &Clause {
+        &self.clauses[clause_idx]
+    }
+
+    pub fn clause_iter<'a>(&'a self) -> ClauseIter<'a> {
+        ClauseIter { inner: self.clauses.iter() }
     }
 
     pub fn check_num_fact_terms(&mut self, facts: &FactTable<T>) -> Result<(), &'static str> {

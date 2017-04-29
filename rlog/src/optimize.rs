@@ -76,7 +76,7 @@ pub fn gradient_step<T>(program: &Program<T>,
                 gx_last = gx;
                 let (gq, mut gv_last) = T::back_finalize(&q, &v_last, &gw);
                 clause_adjustments[clause_idx] = T::dual_sum(&clause_adjustments[clause_idx], &gq);
-                for literal in &program.clauses[clause_idx].body {
+                for literal in &program.get_clause_by_idx(clause_idx).body {
                     // TODO(zentner): Remove this allocation in the innermost loop.
                     let causing_fact = binds.solidify(literal);
                     if entailers.contains(&causing_fact) {
@@ -130,7 +130,7 @@ pub fn compute_adjustments<T>(program: &Program<T>,
                               -> Adjustment<T>
     where T: TruthValue
 {
-    let mut clause_adjustments = vec![T::dual_zero(); program.clauses.len()];
+    let mut clause_adjustments = vec![T::dual_zero(); program.num_clauses()];
     let mut latent_fact_adjustments: FactTable<T> = FactTable::new();
     let mut apparent_fact_adjustments: FactTable<T> = FactTable::new();
     let mut facts = facts.clone();
@@ -158,6 +158,7 @@ pub fn compute_adjustments<T>(program: &Program<T>,
 mod tests {
     use super::compute_adjustments;
     use fact_table::FactTable;
+    use name_table::NameTable;
     use program::Program;
     use truth_value::{MaxFloat64, MaxFloat64Dual};
     use types::{Clause, Fact, Literal, Term};
@@ -167,10 +168,12 @@ mod tests {
         let mut prg = Program::new();
         // b(X) :- a(X)
         // Where a is predicate 0, b is predicate 1, and X is variable 0.
-        prg.clauses
-            .push(Clause::new_from_vec(Literal::new_from_vec(1, vec![Term::Variable(0)]),
-                                       vec![Literal::new_from_vec(0, vec![Term::Variable(0)])]));
-        prg.clause_weights.push(MaxFloat64Dual(0.0));
+        prg.push_clause(Clause::new_from_vec(Literal::new_from_vec(1, vec![Term::Variable(0)]),
+                                              vec![Literal::new_from_vec(0,
+                                                                         vec![Term::Variable(0)])]),
+                         MaxFloat64Dual(0.0),
+                         NameTable::new())
+            .unwrap();
         let mut facts = FactTable::<MaxFloat64>::new();
         // a(2)
         let input_fact = Fact::new_from_vec(0, vec![2]);
@@ -193,14 +196,18 @@ mod tests {
         // a(X) :- b(X)
         // b(X) :- c(X)
         // Where a is predicate 0, b is predicate 1, c is predicate 2, and X is variable 0.
-        prg.clauses
-            .push(Clause::new_from_vec(Literal::new_from_vec(0, vec![Term::Variable(0)]),
-                                       vec![Literal::new_from_vec(1, vec![Term::Variable(0)])]));
-        prg.clause_weights.push(MaxFloat64Dual(0.1));
-        prg.clauses
-            .push(Clause::new_from_vec(Literal::new_from_vec(1, vec![Term::Variable(0)]),
-                                       vec![Literal::new_from_vec(2, vec![Term::Variable(0)])]));
-        prg.clause_weights.push(MaxFloat64Dual(0.1));
+        prg.push_clause(Clause::new_from_vec(Literal::new_from_vec(0, vec![Term::Variable(0)]),
+                                              vec![Literal::new_from_vec(1,
+                                                                         vec![Term::Variable(0)])]),
+                         MaxFloat64Dual(0.1),
+                         NameTable::new())
+            .unwrap();
+        prg.push_clause(Clause::new_from_vec(Literal::new_from_vec(1, vec![Term::Variable(0)]),
+                                              vec![Literal::new_from_vec(2,
+                                                                         vec![Term::Variable(0)])]),
+                         MaxFloat64Dual(0.1),
+                         NameTable::new())
+            .unwrap();
         let mut facts = FactTable::<MaxFloat64>::new();
         // c(2)
         let input_fact = Fact::new_from_vec(2, vec![2]);

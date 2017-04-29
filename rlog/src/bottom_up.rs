@@ -112,8 +112,7 @@ pub fn compute<T>(facts: &FactTable<T>, program: &Program<T>) -> FactTable<T>
         let mut fact_added_last_iter = false;
         for ((clause_idx, clause), truth) in
             program
-                .clauses
-                .iter()
+                .clause_iter()
                 .enumerate()
                 .zip(program.clause_weights.iter().cycle()) {
             let facts_to_add = match_clause(last_iter.as_ref(),
@@ -143,6 +142,7 @@ pub fn compute<T>(facts: &FactTable<T>, program: &Program<T>) -> FactTable<T>
 mod tests {
     use super::evaluate_bottom_up;
     use fact_table::FactTable;
+    use name_table::NameTable;
     use program::Program;
     use types::{Clause, Fact, Literal, Term};
 
@@ -151,10 +151,12 @@ mod tests {
         let mut prg = Program::new();
         // b(X) :- a(X)
         // Where a is predicate 0, b is predicate 1, and X is variable 0.
-        prg.clauses
-            .push(Clause::new_from_vec(Literal::new_from_vec(1, vec![Term::Variable(0)]),
-                                       vec![Literal::new_from_vec(0, vec![Term::Variable(0)])]));
-        prg.clause_weights.push(());
+        prg.push_clause(Clause::new_from_vec(Literal::new_from_vec(1, vec![Term::Variable(0)]),
+                                              vec![Literal::new_from_vec(0,
+                                                                         vec![Term::Variable(0)])]),
+                         (),
+                         NameTable::new())
+            .unwrap();
         let mut facts = FactTable::<()>::new();
         // a(2)
         let starting_fact = Fact::new_from_vec(0, vec![2]);
@@ -181,13 +183,18 @@ mod tests {
         // A(X) :- B(X)
         // B(X) :- C(X)
         // Where A is predicate 0, B is predicate 1, and X is variable 0.
-        prg.clauses
-            .push(Clause::new_from_vec(Literal::new_from_vec(0, vec![Term::Variable(0)]),
-                                       vec![Literal::new_from_vec(1, vec![Term::Variable(0)])]));
-        prg.clause_weights.push(());
-        prg.clauses
-            .push(Clause::new_from_vec(Literal::new_from_vec(1, vec![Term::Variable(0)]),
-                                       vec![Literal::new_from_vec(2, vec![Term::Variable(0)])]));
+        prg.push_clause(Clause::new_from_vec(Literal::new_from_vec(0, vec![Term::Variable(0)]),
+                                              vec![Literal::new_from_vec(1,
+                                                                         vec![Term::Variable(0)])]),
+                         (),
+                         NameTable::new())
+            .unwrap();
+        prg.push_clause(Clause::new_from_vec(Literal::new_from_vec(1, vec![Term::Variable(0)]),
+                                              vec![Literal::new_from_vec(2,
+                                                                         vec![Term::Variable(0)])]),
+                         (),
+                         NameTable::new())
+            .unwrap();
         prg.clause_weights.push(());
         let mut facts = FactTable::<()>::new();
         // c(2)

@@ -93,13 +93,18 @@ impl<T> Refiner<T>
         let mut program = Program::new();
         swap(&mut program, &mut self.program);
         self.program.predicate_names = program.predicate_names.clone();
-        let clauses = program.clauses;
-        let weights = program.clause_weights;
-        for (clause_idx, (clause, weight)) in clauses.into_iter().zip(weights).enumerate() {
+        let weights = &program.clause_weights;
+        for (clause_idx, (clause, weight)) in
+            program
+                .clause_iter()
+                .cloned()
+                .zip(weights.iter().cloned())
+                .enumerate() {
             if T::dual_less(&mean_weight, &weight, self.clause_weight_cutoff_coeff) {
                 let clause_var_names = program
                     .clause_variable_names
-                    .remove(&clause_idx)
+                    .get(&clause_idx)
+                    .cloned()
                     .unwrap_or_else(|| NameTable::new());
                 self.program
                     .push_clause(clause, weight, clause_var_names)

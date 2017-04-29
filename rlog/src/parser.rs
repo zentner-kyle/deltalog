@@ -400,10 +400,8 @@ pub fn program<T>(source: &str)
             };
             if clause.is_valid() {
                 program
-                    .clause_variable_names
-                    .insert(program.clauses.len(), var_names);
-                program.clauses.push(clause);
-                program.clause_weights.push(current_weight.clone());
+                    .push_clause(clause, current_weight.clone(), var_names)
+                    .expect("condition should already have been checked");
             } else {
                 return err_msg("Invalid clause", start_of_clause);
             }

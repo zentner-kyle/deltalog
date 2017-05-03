@@ -48,7 +48,9 @@ pub fn weighted_index_cumulative_array<R>(rng: &mut R, array: &mut [f64]) -> usi
 
 #[cfg(test)]
 mod test {
-    use super::{cumulative_sum, extend_vec_with};
+    use super::{cumulative_sum, extend_vec_with, weighted_index_cumulative_array};
+    use rand::SeedableRng;
+    use rand::XorShiftRng;
 
     #[test]
     fn extend_vec_simple() {
@@ -62,5 +64,16 @@ mod test {
         let mut x: Vec<i64> = vec![1, 0, -1];
         cumulative_sum(&mut x);
         assert_eq!(x, vec![1, 1, 0]);
+    }
+
+    #[test]
+    fn weighted_index_zeros() {
+        let mut rng = XorShiftRng::from_seed([0xde, 0xad, 0xbe, 0xef]);
+        let mut array = vec![0.0f64; 1024];
+        let expected_index = 100;
+        array[expected_index] = 1.0;
+        cumulative_sum(&mut array);
+        let index = weighted_index_cumulative_array(&mut rng, &mut array);
+        assert_eq!(expected_index, index);
     }
 }

@@ -40,6 +40,18 @@ impl Clause {
         }
     }
 
+    #[allow(dead_code)]
+    pub fn head_contains_var(&self, variable: Variable) -> bool {
+        if let Some(ref head) = self.head {
+            for term in &head.terms {
+                if &Term::Variable(variable) == term {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     pub fn is_valid(&self) -> bool {
         for var in 0..self.num_output_variables() {
             if !self.contains_variable_in_body(var) {

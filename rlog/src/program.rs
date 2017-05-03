@@ -11,6 +11,7 @@ pub struct Program<T>
     where T: TruthValue
 {
     clauses: Vec<Clause>,
+    clauses_for_predicate: HashMap<Predicate, Vec<ClauseIndex>>,
     pub clause_weights: Vec<T::Dual>,
     pub predicate_names: NameTable,
     pub clause_variable_names: HashMap<ClauseIndex, NameTable>,
@@ -35,6 +36,7 @@ impl<T> Program<T>
     pub fn new() -> Self {
         Program {
             clauses: Vec::new(),
+            clauses_for_predicate: HashMap::new(),
             clause_weights: Vec::new(),
             predicate_names: NameTable::new(),
             clause_variable_names: HashMap::new(),
@@ -51,6 +53,13 @@ impl<T> Program<T>
             }
         }
         return count;
+    }
+
+    #[allow(dead_code)]
+    pub fn clauses_for_predicate(&self, predicate: Predicate) -> Option<&[ClauseIndex]> {
+        self.clauses_for_predicate
+            .get(&predicate)
+            .map(|v| v.as_ref())
     }
 
     pub fn num_clauses(&self) -> usize {
@@ -107,18 +116,31 @@ impl<T> Program<T>
         *self.predicate_num_terms.get(&predicate).unwrap()
     }
 
+    pub fn push_clause_simple(&mut self, clause: Clause) {
+        self.push_clause(clause, T::dual_default(), NameTable::new())
+            .unwrap();
+    }
+
     pub fn push_clause(&mut self,
                        clause: Clause,
                        weight: T::Dual,
                        var_names: NameTable)
                        -> Result<(), &'static str> {
+        let clause_idx = self.clauses.len();
         if let Some(ref head) = clause.head {
             self.check_num_terms(head)?;
+            match self.clauses_for_predicate.entry(head.predicate) {
+                Entry::Occupied(mut pair) => {
+                    pair.get_mut().push(clause_idx);
+                }
+                Entry::Vacant(pair) => {
+                    pair.insert(vec![clause_idx]);
+                }
+            }
         }
         for literal in &clause.body {
             self.check_num_terms(literal)?;
         }
-        let clause_idx = self.clauses.len();
         self.clauses.push(clause);
         self.clause_weights.push(weight);
         self.clause_variable_names.insert(clause_idx, var_names);

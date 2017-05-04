@@ -7,9 +7,8 @@ use truth_value::TruthValue;
 use types::{Clause, ClauseIndex, Constant, Literal, Predicate, Term, TermIndex, Variable};
 use util::{cumulative_sum, un_cumulative_sum, weighted_index_cumulative_array};
 
-#[allow(dead_code)]
 #[derive(Debug)]
-struct ConstraintMeasure {
+pub struct ConstraintMeasure {
     weight_per_predicate: Vec<f64>,
     cumulative_weight_per_predicate: Vec<f64>,
     unconstraint_demand: HashMap<Predicate, Vec<f64>>,
@@ -38,11 +37,12 @@ fn compute_concrete_term_totals<T>(facts: &FactTable<T>)
     return totals;
 }
 
+// TODO(zentner): Replace found with an iterator, so that sample results can be used.
 #[allow(dead_code)]
-fn compute_constraint_measure<T>(program: &Program<T>,
-                                 found: &FactTable<T>,
-                                 adjustment: &Adjustment<T>)
-                                 -> ConstraintMeasure
+pub fn compute_constraint_measure<T>(program: &Program<T>,
+                                     found: &FactTable<T>,
+                                     adjustment: &Adjustment<T>)
+                                     -> ConstraintMeasure
     where T: TruthValue
 {
     // Compute a total T value for each concrete term value (predicate, index, constant).
@@ -125,62 +125,61 @@ impl ConstraintMeasure {
         weighted_index_cumulative_array(rng, &mut self.cumulative_weight_per_predicate)
     }
 
-    #[allow(dead_code)]
-    pub fn mutate_unconstrain_clause<R>(&mut self, rng: &mut R, clause: &mut Clause)
+    pub fn choose_term<R>(&mut self, rng: &mut R, clause: &mut Clause) -> TermIndex
         where R: Rng
     {
-        let term_to_mutate;
-        let predicate;
-        if let Some(ref head) = clause.head {
-            predicate = head.predicate;
-        } else {
-            return;
-        }
-        if let Some(ref mut per_term_weight) = self.unconstraint_demand.get_mut(&predicate) {
-            cumulative_sum(per_term_weight);
-            term_to_mutate = weighted_index_cumulative_array(rng, per_term_weight);
-            un_cumulative_sum(per_term_weight);
-        } else {
-            return;
-        }
+        let head = clause
+            .head
+            .as_ref()
+            .expect("can only choose a term for a clause with a head");
+        self.unconstraint_demand
+            .get_mut(&head.predicate)
+            .map(|per_term_weight| {
+                     cumulative_sum(per_term_weight);
+                     let term_to_mutate = weighted_index_cumulative_array(rng, per_term_weight);
+                     un_cumulative_sum(per_term_weight);
+                     term_to_mutate
+                 })
+            .unwrap_or_else(|| rng.gen_range(0, head.terms.len()))
+    }
+
+    pub fn mutate_head<R>(&mut self,
+                          rng: &mut R,
+                          clause: &mut Clause,
+                          term_to_mutate: usize)
+                          -> Option<Variable>
+        where R: Rng
+    {
         let num_vars = clause.num_variables();
-        let variable_to_mutate;
-        let mut need_to_add_new_var = false;
-        if let Some(ref mut head) = clause.head {
-            match head.terms[term_to_mutate] {
-                ref mut term @ Term::Constant(_) => {
-                    variable_to_mutate = rng.gen_range(0, num_vars + 1);
-                    *term = Term::Variable(variable_to_mutate);
-                    if variable_to_mutate == num_vars {
-                        need_to_add_new_var = true;
-                    } else {
-                        return;
-                    }
-                }
-                Term::Variable(variable) => {
-                    variable_to_mutate = variable;
+        let head: &mut Literal = clause
+            .head
+            .as_mut()
+            .expect("can only mutate clauses that have a head");
+        match head.terms[term_to_mutate] {
+            ref mut term @ Term::Constant(_) => {
+                let variable_to_mutate = rng.gen_range(0, num_vars + 1);
+                *term = Term::Variable(variable_to_mutate);
+                if variable_to_mutate == num_vars {
+                    Some(variable_to_mutate)
+                } else {
+                    None
                 }
             }
-        } else {
-            return;
+            Term::Variable(ref variable) => Some(*variable),
         }
-        if need_to_add_new_var {
-            self.mutate_add_new_var(rng, &mut clause.body, variable_to_mutate);
-            return;
-        }
-        let num_body_variable_uses: usize = clause
-            .body
-            .iter()
-            .map(|lit| lit.num_times_variable_appears(variable_to_mutate))
-            .sum();
-        let use_to_mutate: usize = rng.gen_range(0, num_body_variable_uses);
+    }
+
+    pub fn insert_variable_use(clause: &mut Clause,
+                               variable: Variable,
+                               use_to_mutate: usize,
+                               target_var: Variable) {
         let mut uses_so_far = 0;
         for lit in clause.body.iter_mut() {
             for term in lit.terms.iter_mut() {
-                if let &mut Term::Variable(ref mut var) = term {
-                    if *var == variable_to_mutate {
+                if let Term::Variable(ref mut var) = *term {
+                    if *var == variable {
                         if uses_so_far == use_to_mutate {
-                            *var = num_vars;
+                            *var = target_var;
                             return;
                         }
                         uses_so_far += 1;
@@ -188,6 +187,35 @@ impl ConstraintMeasure {
                 }
             }
         }
+        unreachable!();
+    }
+
+
+    #[allow(dead_code)]
+    pub fn mutate_unconstrain_clause<R>(&mut self, rng: &mut R, clause: &mut Clause)
+        where R: Rng
+    {
+        let num_vars = clause.num_variables();
+        let term = self.choose_term(rng, clause);
+        if let Some(variable_to_mutate) = self.mutate_head(rng, clause, term) {
+            println!("clause = {:#?}", clause);
+            println!("variable_to_mutate = {:#?}", variable_to_mutate);
+            let num_body_variable_uses: usize = clause
+                .body
+                .iter()
+                .map(|lit| lit.num_times_variable_appears(variable_to_mutate))
+                .sum();
+            if num_body_variable_uses == 0 {
+                self.mutate_add_new_var(rng, &mut clause.body, variable_to_mutate);
+            } else if num_body_variable_uses == 1 {
+                return;
+            } else {
+                let use_to_mutate: usize = rng.gen_range(0, num_body_variable_uses);
+                assert!(use_to_mutate < num_body_variable_uses);
+                Self::insert_variable_use(clause, variable_to_mutate, use_to_mutate, num_vars);
+            }
+        }
+        assert!(clause.is_valid());
     }
 
     fn mutate_add_new_var<R>(&mut self,

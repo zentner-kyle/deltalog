@@ -146,6 +146,16 @@ impl<T> Program<T>
         self.clause_variable_names.insert(clause_idx, var_names);
         return Ok(());
     }
+
+    pub fn mean_weight(&self) -> T::Dual {
+        let num_weights = self.clause_weights.len();
+        let amount_per_weight = 1f64 / num_weights as f64;
+        let mut mean_weight = T::dual_zero();
+        for weight in self.clause_weights.iter() {
+            T::dual_adjust(&mut mean_weight, weight, amount_per_weight);
+        }
+        mean_weight
+    }
 }
 
 impl<T> fmt::Display for Program<T>

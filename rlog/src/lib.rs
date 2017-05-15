@@ -3,19 +3,20 @@ extern crate log;
 extern crate unicode_xid;
 extern crate rand;
 
-mod bottom_up;
 mod bindings;
+mod bottom_up;
+mod fact_table;
+mod fake_rng;
+mod generate;
+mod mutate;
 mod name_table;
+mod optimize;
 mod parser;
 mod program;
-mod types;
-mod fact_table;
-mod optimize;
-mod generate;
-mod refine;
 mod reconstrain;
+mod refine;
+mod types;
 mod util;
-mod fake_rng;
 pub mod truth_value;
 
 use fact_table::FactTable;

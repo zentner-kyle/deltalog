@@ -5,7 +5,7 @@ use name_table::NameTable;
 use optimize::{Adjustment, compute_adjustments};
 use program::Program;
 use rand::{Rng, XorShiftRng};
-use reconstrain::{ConstraintMeasure, compute_constraint_measure};
+use reconstrain::compute_constraint_measure;
 use std::io;
 use std::io::Write;
 use std::mem::swap;

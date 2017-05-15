@@ -4,6 +4,7 @@ use std::fmt;
 pub type Predicate = usize;
 pub type Constant = usize;
 pub type Variable = usize;
+pub type LiteralIndex = usize;
 pub type ClauseIndex = usize;
 pub type TermIndex = usize;
 
@@ -38,6 +39,19 @@ impl Clause {
             head: Some(head),
             body: body,
         }
+    }
+
+    #[allow(dead_code)]
+    pub fn num_times_head_uses_var(&self, variable: Variable) -> usize {
+        let mut count = 0;
+        if let Some(ref head) = self.head {
+            for term in &head.terms {
+                if &Term::Variable(variable) == term {
+                    count += 1;
+                }
+            }
+        }
+        return count;
     }
 
     #[allow(dead_code)]

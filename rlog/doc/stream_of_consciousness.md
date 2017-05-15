@@ -703,3 +703,206 @@ predicate. How about the following algorithm:
   - By using it in more terms in the body.
   - By using it in different terms in the body.
   - By making the other terms in predicates it is in more constrained.
+
+Trying to work out an algorithm in this style is a serious pain. Many of the steps can cause the clause to become invalid.
+One option is to use rejection sampling. But this seems wasteful. Furthermore, the current code is impossible to control in a high level way.
+I would like to be able to tune the mutation in a meaningful way. If we had a calculus of clause mutations, we would be able to organize them in a useful way.
+
+There are two constraints for validity:
+  - Each output variable must have at least one input.
+  - Each literal must have the correct number of terms.
+
+Maybe we should create a datastructure where the validity constraints are
+obvious. Currently, the second constraint is easy to maintain, but the first
+one is easily broken on accident.
+
+We should break up mutation into some number of mutation operations.
+Each mutation operation corresponds to a small change to a clause, which might
+not be valid on its own.
+Suppose the following:
+A clause has some number of bound terms, and 0 free terms.
+Each variable in the clause has some number of supporting terms.
+A valid mutation must ensure that the number of bound terms is kept constant. 
+A valid mutation must ensure that for each variable, the number of terms
+removed from its support should be less than the number of supporting terms.
+A mutation is composed of some number of concrete mutation operations.
+
+An abstract mutation operation might decrease or increase the number of free terms.
+It may also decrease or increase the number of supporting terms for a variable.
+
+Each mutation operation also has a reverse mutation operation, with opposite effects.
+
+The complete set of minimal mutation operations are:
+ 1 bind_constant
+  - Decreases the number of free terms by 1.
+ 2 bind_variable
+  - Decreases the number of free terms by 1.
+  - Increases the number of suport terms for that variable by 1.
+ 3 insert_predicate[n]
+  - Increases the number of free terms by n, the number of terms associated with the predicate.
+ 4 bind_variable_out
+  - Decreases the number of free output terms by 1.
+ 5 bind_constant_out
+  - Decreases the number of free output terms by 1.
+ 6 bind_variable_out_new
+  - Decreases the number of free output terms by 1.
+  - Introduces a new variable which must have support at least 1.
+
+Composing multiple mutation operations results in a mutation, with some preconditions.
+For example:
+ 1 bind_variable - bind_constant -> |terms| >= 1 && Exists var: |var| > 0
+
+Proposed mutation algorithm:
+ - Choose a number of unconstrained mutation operations.
+  - The more operations chosen, the less the new clause will resemble the old.
+   - There might a principled way of choosing this, based on the weight of the clause.
+ - Choose operations which will make 
+
+Taking the set of mutation operations up to some fixed predicate size (say, 8),
+along with the null operation, there is a tensor which gives a meaningful
+weight to each set of operations which maintain validity.
+
+The tensor is the outer product of probabilities for each operation with
+itself, with invalid combinations zeroed out, and rank equal to the maximum
+number of operations considered. There is likely an algorithm we could write to
+sample from this tensor without actually creating it.
+
+The key is that we have a weight vector for the next mutation operation. When
+we choose a mutation operation, we need to update that vector.
+
+If we're willing to build up arbitrarily complex mutations, then there's no
+need to weight any particular mutation operations highly. However, we would
+probably like to have our mutation contain about some number of changed terms
+(or maybe an expected number of mutation operations). By changing the weights
+dynamically, we can make it more likely that we'll have a valid mutation near
+the expected value.
+
+Conceptually, we have two probabilistic schedules here. The tweak / control
+schedule, which has some bias for certain mutation operations. There's also a
+schedule needed to have a valid mutation at the expected time (range). The key
+is that we need to choose mutation operations which are chosen by both
+schedules. This is probably easiest achieved by multiplying them and then
+normalizing the resulting weights (if the array starts to become too small).
+The constraint schedule is determined by it's expected excess change on each
+validity dimension being equal to the amount that dimension is off by.
+
+For example, suppose we need three variables to be bound. If we are targeting
+10 mutops, and have performed 5, then the probability of binding a variable
+needs to be 3/5. But wait, what if we have no free terms? Then there's no way
+to make this work (without adding a predicate). So when we were at 4, we should
+have only been able to free terms or bind variables using free terms.
+
+Ugh, the way constraints interact is so complex.
+For any clause, there must be more terms than output variables.
+To be trivially solvable, there must be more free terms than output variables.
+
+So for the constraint schedule, if free terms <= free output variables require creation of free terms.
+Wait, it's more like this:
+needed_output_variables = ?
+needed_free_terms = needed_output_variables
+needed_for_variables = needed_free_terms - free_terms + needed_output_variables
+if needed_for_variables == ops_remaining:
+  if needed_free_terms == free_terms:
+    output 1 only for binding variables
+  else:
+    output 1 only for creating new terms and binding variables
+elif free_terms == ops_remaining
+  output 1 only for decreasing number of free terms
+
+Using pure weight combination seems pretty tricky to make reasonably correct and efficient.
+Instead, it's probably easiest to output weights for choosing the mutation operations.
+Then, use rejection for the concrete option.
+
+This usually doesn't uniformly sample from the space, or even from a subspace.
+It's not clear that that's a problem, so I'll let it be.
+
+
+I was discussing this project with Daniel last night. He suggested I use a more analytical approach.
+I started actually thinking about what that would imply for SAT lowering.
+For most forms of program synthesis, SAT lowering is basically done by performing symbolic evaluation.
+However, I'm operating on logical programs. It would totally impractical to
+lower all of the search operations done in a datalog program into a SAT
+formula. However, it would be practical to lower only the concrete
+instantiations of some subset of the clauses (like the used instantiations).
+
+However, maybe we can do better.
+We recently realized that having a canonical form for clauses is relatively easy.
+Just sort the output variables, then sort the clauses by predicate number.
+However, having a canonical form for two programs is much harder.
+Formal datalog analysis usually defines the semantics of a datalog program to
+be its output, since that is total and a complete description of its output
+behavior on an input database.
+
+However, having a canonicalization of whole programs might be very useful for anaylsis.
+What would be even more useful would be if we could describe an entire (useful)
+space of programs as a vector space.
+On a related note, it would be nice to know if it's possible to get the same
+capabilities out of a datalog program with more restrictions on its form. For
+example, does having a maximum number of literals per clause or terms per
+literal restrict the language's capabilities. If so, what would be needed to lift this restriction.
+
+What if we had first-class support for enumeration tables?
+For any given input, enumeration tables are equivalent to adding the equivalent real tables.
+This is only true if the variables of each clause have a known space before the
+enumeration table is expanded.
+
+If we write something like this, what happens?
+
+a(X1) :- enumerate!(X, X1, X2), a(X2)
+
+Okay, clearly that's invalid. We can create some rule about enumerate! being a
+virtual table which only has values when all but one of its entries is
+specified by other tables, unless the first entry is specified.
+
+But what if we write something like this:
+
+a(X) :- enumerate!(X, X1, X2), a(X1), a(X2)
+
+This requires us to do some form of type checking, by assuming that a(X) has a
+finite domain. Then, we analyze this clause and see that it increases the
+domain of a(X).
+
+But what if there's something like this:
+
+b(X) :- enumerate!(X, X1, X2), a(X1), a(X2)
+a(X) :- b(X)
+
+Eh, we can probably just use a unification based approach here, and detect
+errors when we try to unify |a(X)| with a type expression (created by enumeration)
+in terms of |a(X)|.
+
+Okay, the behavior of the enumerate is dependent on types, which means that now
+each clause needs to have a finite domain for each variable. That also needs to
+be canonicalized, so it's probably not worthwhile.
+
+Try to canonicalize all arbitrary datalog programs is equivalent to solving the
+restriction problem, right? Which is probably quite difficult, since it's an open research problem.
+
+What if we add first class support for (two-)tuples? Then you can build list /
+curch numerals and are probably Turing complete.
+
+Okay, maybe we should just try to attack the canonicalization directly.
+Firstly, it's always possible to emulate a lower size predicate with a higher
+sized one, by writing programs that happen to always set several of the terms
+equal.
+
+Maybe we can begin by characterize the program by at least two numbers P and T,
+where P is the number of predicates and T is the number of terms in each one.
+
+So maybe it's better to look at this from a bottom up / constraint based idea.
+For each term t, it can have an equality constraint with any other term t'.
+Yeah, after thinking about that, it doesn't seem to go anywhere.
+
+Maybe we should continue trying to define canonicalization using ordering.
+It's pretty easy to define an order function for clauses (basically just
+re-using definitions and recursing on the subtypes).
+
+But there's still a ton of symmetry due to predicate renaming.
+It's probably possible to solve that problem using dataflow ordering constraints.
+Combining these, it's likely possible to enumerate the programs in a space with
+near maximum efficiency.
+
+There's probably still redundant programs in that some later programs have the
+same semantics as earlier programs.
+
+Maybe it would be best to be able to test these things out experimentally.

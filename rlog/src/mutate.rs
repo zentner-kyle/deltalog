@@ -8,12 +8,11 @@ use types::{Clause, ClauseIndex, Constant, Literal, LiteralIndex, Predicate, Ter
             Variable};
 
 struct MutationState {
-    ops_remaining: i64,
     out_var_supports: Vec<Vec<(LiteralIndex, TermIndex)>>,
 }
 
 impl MutationState {
-    fn new(clause: &Clause, ops: usize) -> Self {
+    fn new(clause: &Clause) -> Self {
         let mut out_var_supports = vec![Vec::new(); clause.num_output_variables()];
         for (lit_idx, literal) in clause.body.iter().enumerate() {
             for (term_idx, term) in literal.terms.iter().enumerate() {
@@ -24,10 +23,7 @@ impl MutationState {
                 }
             }
         }
-        MutationState {
-            ops_remaining: ops as i64,
-            out_var_supports,
-        }
+        MutationState { out_var_supports }
     }
 
     fn can_use_head_mut_op(&self, head_op: HeadMutationOp, clause: &Clause) -> bool {
@@ -65,7 +61,7 @@ impl MutationState {
     fn can_use_body_mut_op(&self, body_op: BodyMutationOp, clause: &Clause) -> bool {
         match body_op {
             BodyMutationOp::Swap(_, _) |
-            BodyMutationOp::InsertPredicate(_) => true,
+            BodyMutationOp::InsertLiteral(_) => true,
             BodyMutationOp::BindConstant((lit_idx, term_idx), _) |
             BodyMutationOp::BindVariable((lit_idx, term_idx), _) => {
                 if let Term::Variable(varb) = clause.body[lit_idx].terms[term_idx] {
@@ -74,7 +70,7 @@ impl MutationState {
                     true
                 }
             }
-            BodyMutationOp::RemovePredicate(lit_idx) => {
+            BodyMutationOp::RemoveLiteral(lit_idx) => {
                 let mut variable_removals = vec![0; clause.num_output_variables()];
                 for term in &clause.body[lit_idx].terms {
                     if let Term::Variable(varb) = *term {
@@ -99,8 +95,39 @@ impl MutationState {
         }
     }
 
-    fn apply_body_mut_op(&mut self, body_op: BodyMutationOp, clause: &mut Clause) {
-        // TODO
+    fn apply_body_mut_op<R, T>(&mut self,
+                               body_op: BodyMutationOp,
+                               clause: &mut Clause,
+                               rng: &mut R,
+                               program: &Program<T>)
+        where R: Rng,
+              T: TruthValue
+    {
+        match body_op {
+            BodyMutationOp::Swap((lit_a, term_a), (lit_b, term_b)) => {
+                let a = clause.body[lit_a].terms[term_a];
+                let b = clause.body[lit_b].terms[term_b];
+                clause.body[lit_a].terms[term_a] = b;
+                clause.body[lit_b].terms[term_b] = a;
+            }
+            BodyMutationOp::InsertLiteral(pred) => {
+                let mut terms = (0..(1 + clause.num_variables()))
+                    .map(|i| Term::Variable(i))
+                    .collect::<Vec<_>>();
+                rng.shuffle(&mut terms);
+                terms.truncate(program.get_num_terms(pred));
+                clause.body.push(Literal::new_from_vec(pred, terms));
+            }
+            BodyMutationOp::BindConstant((lit_idx, term_idx), cst) => {
+                clause.body[lit_idx].terms[term_idx] = Term::Constant(cst);
+            }
+            BodyMutationOp::BindVariable((lit_idx, term_idx), varb) => {
+                clause.body[lit_idx].terms[term_idx] = Term::Variable(varb);
+            }
+            BodyMutationOp::RemoveLiteral(lit_idx) => {
+                clause.body.remove(lit_idx);
+            }
+        }
     }
 }
 
@@ -109,8 +136,8 @@ enum BodyMutationOp {
     Swap((LiteralIndex, TermIndex), (LiteralIndex, TermIndex)),
     BindConstant((LiteralIndex, TermIndex), Constant),
     BindVariable((LiteralIndex, TermIndex), Variable),
-    InsertPredicate(Predicate),
-    RemovePredicate(LiteralIndex),
+    InsertLiteral(Predicate),
+    RemoveLiteral(LiteralIndex),
 }
 
 

@@ -169,7 +169,7 @@ mod tests {
     use rand::XorShiftRng;
     use truth_value::MaxFloat64;
 
-    #[test]
+    //#[test]
     fn can_refine_single_clause() {
         let rng = XorShiftRng::from_seed([0xde, 0xad, 0xbe, 0xef]);
         let (facts, program, samples) = program::<MaxFloat64>(r#"

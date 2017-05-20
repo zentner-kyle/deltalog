@@ -97,6 +97,7 @@ impl<T> Program<T>
         return Ok(());
     }
 
+    // TODO(zentner): Rename.
     pub fn check_num_terms(&mut self, literal: &Literal) -> Result<(), &'static str> {
         let num_terms = literal.terms.len();
         match self.predicate_num_terms.entry(literal.predicate) {
@@ -110,6 +111,10 @@ impl<T> Program<T>
             }
         }
         return Ok(());
+    }
+
+    pub fn num_terms(&self, predicate: Predicate) -> Option<usize> {
+        self.predicate_num_terms.get(&predicate).cloned()
     }
 
     pub fn get_num_terms(&self, predicate: Predicate) -> usize {
@@ -155,6 +160,13 @@ impl<T> Program<T>
             T::dual_adjust(&mut mean_weight, weight, amount_per_weight);
         }
         mean_weight
+    }
+
+    pub fn clear_clauses(&mut self) {
+        self.clauses.clear();
+        self.clauses_for_predicate.clear();
+        self.clause_weights.clear();
+        self.predicate_num_terms.clear();
     }
 }
 

@@ -43,19 +43,7 @@ impl<R> Generator<R>
     pub fn update_max_constant<T>(&mut self, facts: &FactTable<T>)
         where T: TruthValue
     {
-        for (fact, _) in facts.all_facts_iter() {
-            for (index, &constant) in fact.terms.iter().enumerate() {
-                match self.max_constant.entry((fact.predicate, index)) {
-                    Entry::Occupied(mut pair) => {
-                        let old_val = *pair.get();
-                        pair.insert(cmp::max(old_val, constant));
-                    }
-                    Entry::Vacant(pair) => {
-                        pair.insert(constant);
-                    }
-                }
-            }
-        }
+        self.max_constant = facts.max_constant_table();
     }
 
     fn gen_predicate(&mut self) -> Predicate {

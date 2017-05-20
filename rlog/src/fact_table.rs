@@ -1,11 +1,12 @@
 use bindings::Bindings;
 use name_table::NameTable;
+use std::cmp;
 use std::collections::hash_map;
 use std::collections::hash_map::{Entry, HashMap};
 use std::iter;
 use std::slice;
 use truth_value::TruthValue;
-use types::{ClauseIndex, Fact, Literal, Predicate};
+use types::{ClauseIndex, Constant, Fact, Literal, Predicate, TermIndex};
 
 #[derive(Clone, Debug, PartialEq)]
 struct FactRecord<T>
@@ -277,5 +278,25 @@ impl<T> FactTable<T>
         facts.sort();
         other_facts.sort();
         return facts == other_facts;
+    }
+
+    pub fn max_constant_table(&self) -> HashMap<(Predicate, TermIndex), Constant>
+        where T: TruthValue
+    {
+        let mut result = HashMap::with_capacity(8 * self.len());
+        for (fact, _) in self.all_facts_iter() {
+            for (index, &constant) in fact.terms.iter().enumerate() {
+                match result.entry((fact.predicate, index)) {
+                    Entry::Occupied(mut pair) => {
+                        let old_val = *pair.get();
+                        pair.insert(cmp::max(old_val, constant));
+                    }
+                    Entry::Vacant(pair) => {
+                        pair.insert(constant);
+                    }
+                }
+            }
+        }
+        return result;
     }
 }

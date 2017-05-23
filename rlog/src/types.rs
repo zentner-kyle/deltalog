@@ -126,6 +126,30 @@ impl Clause {
         return false;
     }
 
+    pub fn max_constant(&self) -> Constant {
+        let mut max = 0;
+        if let Some(ref head) = self.head {
+            for term in &head.terms {
+                if let Term::Constant(cst) = *term {
+                    if cst > max {
+                        max = cst;
+                    }
+                }
+            }
+        }
+        for lit in &self.body {
+            for term in &lit.terms {
+                if let Term::Constant(cst) = *term {
+                    if cst > max {
+                        max = cst;
+                    }
+                }
+            }
+        }
+        return max;
+    }
+
+
     pub fn max_predicate(&self) -> Predicate {
         let mut max = 0;
         if let Some(ref head) = self.head {
@@ -133,9 +157,9 @@ impl Clause {
                 max = head.predicate;
             }
         }
-        for term in self.body.iter() {
-            if term.predicate > max {
-                max = term.predicate;
+        for lit in &self.body {
+            if lit.predicate > max {
+                max = lit.predicate;
             }
         }
         return max;
@@ -170,6 +194,7 @@ impl Literal {
         }
     }
 
+    #[allow(dead_code)]
     pub fn num_times_variable_appears(&self, variable: Variable) -> usize {
         self.terms
             .iter()

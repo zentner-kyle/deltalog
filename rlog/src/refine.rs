@@ -1,11 +1,13 @@
 use bottom_up::evaluate_bottom_up;
 use fact_table::FactTable;
 use generate::Generator;
+use mutate::{MutationOpGenerator, MutationState};
 use name_table::NameTable;
 use optimize::{Adjustment, compute_adjustments};
 use program::Program;
 use rand::{Rng, XorShiftRng};
 use reconstrain::compute_constraint_measure;
+use selector::Selector;
 use std::io;
 use std::io::Write;
 use std::mem::swap;
@@ -82,8 +84,32 @@ impl<R, T> Refiner<R, T>
         let mut result_facts = self.base_facts.clone();
         evaluate_bottom_up(&mut result_facts, &self.program);
         let mut constraint = compute_constraint_measure(&self.program, &result_facts, &adjust);
+        let gen = MutationOpGenerator::uniform();
         for _ in 0..self.num_mutated_clauses_to_add {
-            constraint.insert_new_clause(&mut self.rng, &mut self.program);
+            if let Ok(clause_idx) = constraint.choose_clause(&mut self.rng, &self.program) {
+                let mut clause = self.program.get_clause_by_idx(clause_idx).clone();
+                let mut state = MutationState::new(&clause);
+                if let Ok(body_op) = gen.generate_body(&mut self.rng,
+                                                       &mut constraint,
+                                                       &self.program,
+                                                       0) {
+                    state.checked_apply_body_mut_op(body_op,
+                                                    &mut clause,
+                                                    &mut self.rng,
+                                                    &self.program);
+
+                }
+                if let Ok(head_op) = gen.generate_head(&mut self.rng,
+                                                       &mut constraint,
+                                                       &self.program,
+                                                       0) {
+                    state.checked_apply_head_mut_op(head_op,
+                                                    &mut clause,
+                                                    &mut self.rng,
+                                                    &self.program);
+                }
+                self.program.push_clause_simple(clause);
+            }
         }
     }
 
@@ -169,7 +195,8 @@ mod tests {
     use rand::XorShiftRng;
     use truth_value::MaxFloat64;
 
-    //#[test]
+    #[test]
+    #[allow(dead_code)]
     fn can_refine_single_clause() {
         let rng = XorShiftRng::from_seed([0xde, 0xad, 0xbe, 0xef]);
         let (facts, program, samples) = program::<MaxFloat64>(r#"

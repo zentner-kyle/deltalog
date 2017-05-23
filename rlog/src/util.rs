@@ -32,7 +32,7 @@ pub fn un_cumulative_sum<T>(array: &mut [T])
 }
 
 #[allow(dead_code)]
-pub fn weighted_index_cumulative_array<R>(rng: &mut R, array: &mut [f64]) -> usize
+pub fn weighted_index_cumulative_array<R>(rng: &mut R, array: &[f64]) -> usize
     where R: Rng
 {
     let max_cumulative_weight = array[array.len() - 1];

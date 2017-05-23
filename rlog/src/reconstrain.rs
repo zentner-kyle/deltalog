@@ -2,16 +2,21 @@ use fact_table::FactTable;
 use optimize::Adjustment;
 use program::Program;
 use rand::Rng;
+use selector::{Selector, SelectorResult};
 use std::collections::hash_map::{Entry, HashMap};
 use truth_value::TruthValue;
-use types::{Clause, ClauseIndex, Constant, Literal, Predicate, Term, TermIndex, Variable};
-use util::{cumulative_sum, un_cumulative_sum, weighted_index_cumulative_array};
+use types::{ClauseIndex, Constant, LiteralIndex, Predicate, TermIndex, Variable};
+use util::{cumulative_sum, weighted_index_cumulative_array};
 
 #[derive(Debug)]
 pub struct ConstraintMeasure {
+    // How much each Predicate wants to change.
     weight_per_predicate: Vec<f64>,
+    // Cumulative sum of the above.
     cumulative_weight_per_predicate: Vec<f64>,
+    // How much each Term wants to be changed for a Predicate.
     unconstraint_demand: HashMap<Predicate, Vec<f64>>,
+    // Cumulative sum of the above.
     cumulative_unconstraint_demand: HashMap<Predicate, Vec<f64>>,
     // TODO(zentner): Add constraint_demand.
 }
@@ -62,14 +67,14 @@ pub fn compute_constraint_measure<T>(program: &Program<T>,
     }
 
     let mut unconstraint_demand = HashMap::new();
-    for ((predicate, index, _), demand) in latent_not_found {
+    for ((predicate, term_index, _), demand) in latent_not_found {
         match unconstraint_demand.entry(predicate) {
             Entry::Occupied(mut pair) => {
-                pair.get_mut()[index] += demand;
+                pair.get_mut()[term_index] += demand;
             }
             Entry::Vacant(pair) => {
                 let mut clause_term_weights = vec![0.0f64; program.get_num_terms(predicate)];
-                clause_term_weights[index] = demand;
+                clause_term_weights[term_index] = demand;
                 pair.insert(clause_term_weights);
             }
         }
@@ -92,10 +97,10 @@ pub fn compute_constraint_measure<T>(program: &Program<T>,
     cumulative_sum(&mut cumulative_weight_per_predicate);
 
     return ConstraintMeasure {
-               weight_per_predicate: weight_per_predicate,
-               cumulative_weight_per_predicate: cumulative_weight_per_predicate,
-               unconstraint_demand: unconstraint_demand,
-               cumulative_unconstraint_demand: cumulative_unconstraint_demand,
+               weight_per_predicate,
+               cumulative_weight_per_predicate,
+               unconstraint_demand,
+               cumulative_unconstraint_demand,
            };
 }
 
@@ -111,196 +116,166 @@ impl ConstraintMeasure {
             cumulative_sum(demand);
         }
         return ConstraintMeasure {
-                   weight_per_predicate: weight_per_predicate,
-                   cumulative_weight_per_predicate: cumulative_weight_per_predicate,
-                   unconstraint_demand: unconstraint_demand,
-                   cumulative_unconstraint_demand: cumulative_unconstraint_demand,
+                   weight_per_predicate,
+                   cumulative_weight_per_predicate,
+                   unconstraint_demand,
+                   cumulative_unconstraint_demand,
                };
     }
 
-    #[allow(dead_code)]
-    pub fn choose_predicate<R>(&mut self, rng: &mut R) -> Predicate
+    fn gen_range<R>(&self, rng: &mut R, end: usize) -> SelectorResult<usize>
         where R: Rng
     {
-        weighted_index_cumulative_array(rng, &mut self.cumulative_weight_per_predicate)
+        if end == 0 {
+            Err("Nothing to choose from.")
+        } else {
+            Ok(rng.gen_range(0, end))
+        }
+    }
+}
+
+impl Selector for ConstraintMeasure {
+    fn choose_clause<R, T>(&mut self,
+                           rng: &mut R,
+                           program: &Program<T>)
+                           -> SelectorResult<ClauseIndex>
+        where R: Rng,
+              T: TruthValue
+    {
+        let predicate = weighted_index_cumulative_array(rng,
+                                                        &mut self.cumulative_weight_per_predicate);
+        let clauses = program
+            .clauses_for_predicate(predicate)
+            .ok_or("Chose bad predicate.")?;
+        rng.choose(clauses).cloned().ok_or("No clauses.")
     }
 
-    pub fn choose_term<R>(&mut self, rng: &mut R, clause: &mut Clause) -> TermIndex
-        where R: Rng
+    fn choose_predicate<R, T>(&mut self,
+                              rng: &mut R,
+                              _program: &Program<T>,
+                              _clause: ClauseIndex)
+                              -> SelectorResult<Predicate>
+        where R: Rng,
+              T: TruthValue
     {
+        // This only really makes sense for the head.
+        Ok(weighted_index_cumulative_array(rng, &mut self.cumulative_weight_per_predicate))
+    }
+
+    fn choose_literal<R, T>(&mut self,
+                            rng: &mut R,
+                            program: &Program<T>,
+                            clause: ClauseIndex)
+                            -> SelectorResult<LiteralIndex>
+        where R: Rng,
+              T: TruthValue
+    {
+        // TODO(zentner): Don't choose literal uniformly.
+        self.gen_range(rng, program.get_clause_by_idx(clause).body.len())
+    }
+
+    fn choose_term<R, T>(&mut self,
+                         rng: &mut R,
+                         program: &Program<T>,
+                         clause: ClauseIndex,
+                         literal: LiteralIndex)
+                         -> SelectorResult<TermIndex>
+        where R: Rng,
+              T: TruthValue
+    {
+        let clause = program.get_clause_by_idx(clause);
+        let literal = &clause.body[literal];
+        let predicate = literal.predicate;
+        let cumulative_demand = self.cumulative_unconstraint_demand
+            .get(&predicate)
+            .ok_or("No demand for Predicate.")?;
+        Ok(weighted_index_cumulative_array(rng, cumulative_demand))
+
+    }
+
+    fn choose_variable<R, T>(&mut self,
+                             rng: &mut R,
+                             program: &Program<T>,
+                             clause: ClauseIndex,
+                             _literal: LiteralIndex,
+                             _term: TermIndex)
+                             -> SelectorResult<Variable>
+        where R: Rng,
+              T: TruthValue
+    {
+        // TODO(zentner): Don't select variable uniformly.
+        self.gen_range(rng, program.get_clause_by_idx(clause).num_variables())
+    }
+
+    fn choose_constant<R, T>(&mut self,
+                             rng: &mut R,
+                             program: &Program<T>,
+                             clause: ClauseIndex,
+                             _literal: LiteralIndex,
+                             _term: TermIndex)
+                             -> SelectorResult<Constant>
+        where R: Rng,
+              T: TruthValue
+    {
+        // TODO(zentner): Don't select constants uniformly.
+        self.gen_range(rng, program.get_clause_by_idx(clause).max_constant())
+    }
+
+    fn choose_head_term<R, T>(&mut self,
+                              rng: &mut R,
+                              program: &Program<T>,
+                              clause: ClauseIndex)
+                              -> SelectorResult<TermIndex>
+        where R: Rng,
+              T: TruthValue
+    {
+        let clause = program.get_clause_by_idx(clause);
         let head = clause
             .head
             .as_ref()
-            .expect("can only choose a term for a clause with a head");
-        self.unconstraint_demand
-            .get_mut(&head.predicate)
-            .map(|per_term_weight| {
-                     cumulative_sum(per_term_weight);
-                     let term_to_mutate = weighted_index_cumulative_array(rng, per_term_weight);
-                     un_cumulative_sum(per_term_weight);
-                     term_to_mutate
-                 })
-            .unwrap_or_else(|| rng.gen_range(0, head.terms.len()))
+            .ok_or("Can only mutate clauses with heads.")?;
+        let cumulative_demand = self.cumulative_unconstraint_demand
+            .get(&head.predicate)
+            .ok_or("No demand for Predicate.")?;
+        Ok(weighted_index_cumulative_array(rng, cumulative_demand))
     }
 
-    pub fn mutate_head<R>(&mut self,
-                          rng: &mut R,
-                          clause: &mut Clause,
-                          term_to_mutate: usize)
-                          -> Option<Variable>
-        where R: Rng
-    {
-        let num_vars = clause.num_variables();
-        let head: &mut Literal = clause
-            .head
-            .as_mut()
-            .expect("can only mutate clauses that have a head");
-        match head.terms[term_to_mutate] {
-            ref mut term @ Term::Constant(_) => {
-                let variable_to_mutate = rng.gen_range(0, num_vars + 1);
-                *term = Term::Variable(variable_to_mutate);
-                if variable_to_mutate == num_vars {
-                    Some(variable_to_mutate)
-                } else {
-                    None
-                }
-            }
-            Term::Variable(ref variable) => Some(*variable),
-        }
-    }
-
-    pub fn insert_variable_use(clause: &mut Clause,
-                               variable: Variable,
-                               use_to_mutate: usize,
-                               target_var: Variable) {
-        let mut uses_so_far = 0;
-        for lit in clause.body.iter_mut() {
-            for term in lit.terms.iter_mut() {
-                if let Term::Variable(ref mut var) = *term {
-                    if *var == variable {
-                        if uses_so_far == use_to_mutate {
-                            *var = target_var;
-                            return;
-                        }
-                        uses_so_far += 1;
-                    }
-                }
-            }
-        }
-        unreachable!();
-    }
-
-
-    #[allow(dead_code)]
-    pub fn mutate_unconstrain_clause<R>(&mut self, rng: &mut R, clause: &mut Clause)
-        where R: Rng
-    {
-        let num_vars = clause.num_variables();
-        let term = self.choose_term(rng, clause);
-        if let Some(variable_to_mutate) = self.mutate_head(rng, clause, term) {
-            println!("clause = {:#?}", clause);
-            println!("variable_to_mutate = {:#?}", variable_to_mutate);
-            let num_body_variable_uses: usize = clause
-                .body
-                .iter()
-                .map(|lit| lit.num_times_variable_appears(variable_to_mutate))
-                .sum();
-            if num_body_variable_uses == 0 {
-                self.mutate_add_new_var(rng, &mut clause.body, variable_to_mutate);
-            } else if num_body_variable_uses == 1 {
-                return;
-            } else {
-                let use_to_mutate: usize = rng.gen_range(0, num_body_variable_uses);
-                assert!(use_to_mutate < num_body_variable_uses);
-                Self::insert_variable_use(clause, variable_to_mutate, use_to_mutate, num_vars);
-            }
-        }
-        assert!(clause.is_valid());
-    }
-
-    fn mutate_add_new_var<R>(&mut self,
-                             rng: &mut R,
-                             clause_body: &mut Vec<Literal>,
-                             variable: Variable)
-                             -> bool
-        where R: Rng
-    {
-        let mut lit_num_constants = vec![0.0f64; clause_body.len()];
-        for (lit_idx, lit) in clause_body.iter().enumerate() {
-            for term in &lit.terms {
-                if let &Term::Constant(_) = term {
-                    lit_num_constants[lit_idx] += 1.0;
-                }
-            }
-        }
-        cumulative_sum(&mut lit_num_constants);
-        if lit_num_constants[lit_num_constants.len() - 1] == 0.0 {
-            return false;
-        }
-        let lit_to_use = weighted_index_cumulative_array(rng, &mut lit_num_constants);
-        let num_constants = if lit_to_use == 0 {
-            lit_num_constants[lit_to_use]
-        } else {
-            lit_num_constants[lit_to_use] - lit_num_constants[lit_to_use - 1]
-        } as usize;
-        let mut constant_num = rng.gen_range(0, num_constants);
-        for term in clause_body[lit_to_use].terms.iter_mut() {
-            if let term @ &mut Term::Constant(_) = term {
-                if constant_num == 0 {
-                    *term = Term::Variable(variable);
-                    return true;
-                }
-                constant_num -= 1;
-            }
-        }
-        unreachable!();
-    }
-
-    pub fn choose_clause<R, T>(&mut self, rng: &mut R, program: &Program<T>) -> ClauseIndex
+    fn choose_head_variable<R, T>(&mut self,
+                                  rng: &mut R,
+                                  program: &Program<T>,
+                                  clause: ClauseIndex,
+                                  _term: TermIndex)
+                                  -> SelectorResult<Variable>
         where R: Rng,
               T: TruthValue
     {
-        loop {
-            let predicate = self.choose_predicate(rng);
-            if let Some(clauses) = program.clauses_for_predicate(predicate) {
-                return *rng.choose(clauses).unwrap();
-            }
-        }
+        // TODO(zentner): Don't choose uniformly
+        let num_variables = program.get_clause_by_idx(clause).num_variables();
+        self.gen_range(rng, num_variables)
     }
 
-    pub fn make_new_clause<R, T>(&mut self, rng: &mut R, program: &mut Program<T>) -> Clause
+    fn choose_head_constant<R, T>(&mut self,
+                                  rng: &mut R,
+                                  program: &Program<T>,
+                                  clause: ClauseIndex,
+                                  _term: TermIndex)
+                                  -> SelectorResult<Constant>
         where R: Rng,
               T: TruthValue
     {
-        let clause_idx = self.choose_clause(rng, program);
-        let mut clause = program.get_clause_by_idx(clause_idx).clone();
-        self.mutate_unconstrain_clause(rng, &mut clause);
-        return clause;
-    }
-
-    #[allow(dead_code)]
-    pub fn insert_new_clause<R, T>(&mut self, rng: &mut R, program: &mut Program<T>)
-        where R: Rng,
-              T: TruthValue
-    {
-        let clause = self.make_new_clause(rng, program);
-        program.push_clause_simple(clause);
+        let clause = program.get_clause_by_idx(clause);
+        self.gen_range(rng, clause.max_constant())
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::{ConstraintMeasure, compute_constraint_measure};
-    use bottom_up::evaluate_bottom_up;
+    use super::ConstraintMeasure;
     use fake_rng::FakeRng;
-    use optimize::compute_adjustments;
-    use parser::program;
-    use rand::SeedableRng;
-    use rand::XorShiftRng;
+    use program::Program;
+    use selector::Selector;
     use std::collections::HashMap;
     use std::f64;
-    use truth_value::MaxFloat64;
-    use types::{Clause, Literal, Term};
 
     #[test]
     fn choose_predicate_first() {
@@ -308,8 +283,9 @@ mod test {
         println!("constraint_measure = {:#?}", constraint_measure);
         let mut rng = FakeRng::new();
         rng.push_f64(0.0);
-        let pred = constraint_measure.choose_predicate(&mut rng);
-        assert_eq!(pred, 0);
+        let program = Program::<()>::new();
+        let pred = constraint_measure.choose_predicate(&mut rng, &program, 0);
+        assert_eq!(pred, Ok(0));
     }
 
     #[test]
@@ -318,8 +294,9 @@ mod test {
         println!("constraint_measure = {:#?}", constraint_measure);
         let mut rng = FakeRng::new();
         rng.push_f64(1.0 - f64::EPSILON);
-        let pred = constraint_measure.choose_predicate(&mut rng);
-        assert_eq!(pred, 2);
+        let program = Program::<()>::new();
+        let pred = constraint_measure.choose_predicate(&mut rng, &program, 0);
+        assert_eq!(pred, Ok(2));
     }
 
     #[test]
@@ -328,8 +305,9 @@ mod test {
         println!("constraint_measure = {:#?}", constraint_measure);
         let mut rng = FakeRng::new();
         rng.push_f64(0.5);
-        let pred = constraint_measure.choose_predicate(&mut rng);
-        assert_eq!(pred, 1);
+        let program = Program::<()>::new();
+        let pred = constraint_measure.choose_predicate(&mut rng, &program, 0);
+        assert_eq!(pred, Ok(1));
     }
 
     #[test]
@@ -338,33 +316,8 @@ mod test {
         println!("constraint_measure = {:#?}", constraint_measure);
         let mut rng = FakeRng::new();
         rng.push_f64(0.25);
-        let pred = constraint_measure.choose_predicate(&mut rng);
-        assert_eq!(pred, 1);
-    }
-
-    #[test]
-    fn improves_single_clause() {
-        let mut rng = XorShiftRng::from_seed([0xde, 0xad, 0xbe, 0xef]);
-        let (mut facts, mut program, samples) = program::<MaxFloat64>(r#"
-            types(0) :- a(0), b(0)
-            a(3) :- b(3)
-            sample
-                b(1)
-            output
-                a(1).
-            sample
-                b(2)
-            output
-                a(2).
-        "#)
-                .unwrap()
-                .0;
-        evaluate_bottom_up(&mut facts, &program);
-        let adjustments = compute_adjustments(&program, &facts, &samples, 10);
-        let mut constraint = compute_constraint_measure(&program, &facts, &adjustments);
-        let clause = constraint.make_new_clause(&mut rng, &mut program);
-        assert_eq!(Clause::new_from_vec(Literal::new_from_vec(1, vec![Term::Variable(0)]),
-                                        vec![Literal::new_from_vec(2, vec![Term::Variable(0)])]),
-                   clause);
+        let program = Program::<()>::new();
+        let pred = constraint_measure.choose_predicate(&mut rng, &program, 0);
+        assert_eq!(pred, Ok(1));
     }
 }

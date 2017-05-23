@@ -113,6 +113,7 @@ impl<T> Program<T>
         return Ok(());
     }
 
+    #[allow(dead_code)]
     pub fn num_terms(&self, predicate: Predicate) -> Option<usize> {
         self.predicate_num_terms.get(&predicate).cloned()
     }
@@ -162,6 +163,7 @@ impl<T> Program<T>
         mean_weight
     }
 
+    #[allow(dead_code)]
     pub fn clear_clauses(&mut self) {
         self.clauses.clear();
         self.clauses_for_predicate.clear();

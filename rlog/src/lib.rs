@@ -17,6 +17,8 @@ mod reconstrain;
 mod refine;
 mod types;
 mod util;
+mod selector;
+mod uniform_selector;
 pub mod truth_value;
 
 use fact_table::FactTable;

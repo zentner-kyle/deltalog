@@ -1,22 +1,18 @@
 #![allow(dead_code)]
 
-use fact_table::FactTable;
 use program::Program;
 use rand::Rng;
-use reconstrain::ConstraintMeasure;
-use std::collections::{HashMap, HashSet};
+use selector::Selector;
 use truth_value::TruthValue;
 use types::{Clause, ClauseIndex, Constant, Literal, LiteralIndex, Predicate, Term, TermIndex,
             Variable};
 
-struct MutationState {
+pub struct MutationState {
     out_var_supports: Vec<Vec<(LiteralIndex, TermIndex)>>,
 }
 
-type GenResult<T> = Result<T, &'static str>;
-
 impl MutationState {
-    fn new(clause: &Clause) -> Self {
+    pub fn new(clause: &Clause) -> Self {
         let mut out_var_supports = vec![Vec::new(); clause.num_output_variables()];
         for (lit_idx, literal) in clause.body.iter().enumerate() {
             for (term_idx, term) in literal.terms.iter().enumerate() {
@@ -38,8 +34,17 @@ impl MutationState {
         }
     }
 
-    fn checked_apply_head_mut_op(&mut self, head_op: HeadMutationOp, clause: &mut Clause) -> bool {
+    pub fn checked_apply_head_mut_op<R, T>(&mut self,
+                                           head_op: HeadMutationOp,
+                                           clause: &mut Clause,
+                                           _rng: &mut R,
+                                           _program: &Program<T>)
+                                           -> bool
+        where R: Rng,
+              T: TruthValue
+    {
         if self.can_use_head_mut_op(head_op, clause) {
+            self.apply_head_mut_op(head_op, clause);
             true
         } else {
             false
@@ -76,23 +81,40 @@ impl MutationState {
             }
             BodyMutationOp::RemoveLiteral(lit_idx) => {
                 let mut variable_removals = vec![0; clause.num_output_variables()];
-                for term in &clause.body[lit_idx].terms {
-                    if let Term::Variable(varb) = *term {
-                        variable_removals[varb] += 1;
+                if let Some(lit) = clause.body.get(lit_idx) {
+                    for term in &lit.terms {
+                        if let Term::Variable(varb) = *term {
+                            if varb < variable_removals.len() {
+                                variable_removals[varb] += 1;
+                            } else {
+                                return false;
+                            }
+                        }
                     }
-                }
-                for (varb, removals) in variable_removals.iter().enumerate() {
-                    if self.out_var_supports[varb].len() <= *removals {
-                        return false;
+                    for (varb, removals) in variable_removals.iter().enumerate() {
+                        if self.out_var_supports[varb].len() <= *removals {
+                            return false;
+                        }
                     }
+                    return true;
+                } else {
+                    return false;
                 }
-                return true;
             }
         }
     }
 
-    fn checked_apply_body_mut_op(&mut self, body_op: BodyMutationOp, clause: &mut Clause) -> bool {
+    pub fn checked_apply_body_mut_op<R, T>(&mut self,
+                                           body_op: BodyMutationOp,
+                                           clause: &mut Clause,
+                                           rng: &mut R,
+                                           program: &Program<T>)
+                                           -> bool
+        where R: Rng,
+              T: TruthValue
+    {
         if self.can_use_body_mut_op(body_op, clause) {
+            self.apply_body_mut_op(body_op, clause, rng, program);
             true
         } else {
             false
@@ -142,7 +164,7 @@ impl MutationState {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-enum BodyMutationOp {
+pub enum BodyMutationOp {
     Swap((LiteralIndex, TermIndex), (LiteralIndex, TermIndex)),
     BindConstant((LiteralIndex, TermIndex), Constant),
     BindVariable((LiteralIndex, TermIndex), Variable),
@@ -152,13 +174,13 @@ enum BodyMutationOp {
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-enum HeadMutationOp {
+pub enum HeadMutationOp {
     BindConstant(TermIndex, Constant),
     BindVariable(TermIndex, Variable),
 }
 
 #[derive(Debug, Clone)]
-struct MutationOpGenerator {
+pub struct MutationOpGenerator {
     num_body_ops: i64,
     num_head_ops: i64,
     body_swap_prob: f64,
@@ -170,263 +192,7 @@ struct MutationOpGenerator {
     head_bind_variable_prob: f64,
 }
 
-trait Selector {
-    fn choose_clause<R, T>(&mut self, rng: &mut R, program: &Program<T>) -> GenResult<ClauseIndex>
-        where R: Rng,
-              T: TruthValue;
-
-    fn choose_predicate<R, T>(&mut self,
-                              rng: &mut R,
-                              program: &Program<T>,
-                              clause: ClauseIndex)
-                              -> GenResult<Predicate>
-        where R: Rng,
-              T: TruthValue;
-
-    fn choose_literal<R, T>(&mut self,
-                            rng: &mut R,
-                            program: &Program<T>,
-                            clause: ClauseIndex)
-                            -> GenResult<LiteralIndex>
-        where R: Rng,
-              T: TruthValue;
-
-    fn choose_literal_to_remove<R, T>(&mut self,
-                                      rng: &mut R,
-                                      program: &Program<T>,
-                                      clause: ClauseIndex)
-                                      -> GenResult<LiteralIndex>
-        where R: Rng,
-              T: TruthValue
-    {
-        self.choose_literal(rng, program, clause)
-    }
-
-    fn choose_term<R, T>(&mut self,
-                         rng: &mut R,
-                         program: &Program<T>,
-                         clause: ClauseIndex,
-                         literal: LiteralIndex)
-                         -> GenResult<TermIndex>
-        where R: Rng,
-              T: TruthValue;
-
-    fn choose_variable<R, T>(&mut self,
-                             rng: &mut R,
-                             program: &Program<T>,
-                             clause: ClauseIndex,
-                             literal: LiteralIndex,
-                             term: TermIndex)
-                             -> GenResult<Variable>
-        where R: Rng,
-              T: TruthValue;
-
-    fn choose_constant<R, T>(&mut self,
-                             rng: &mut R,
-                             program: &Program<T>,
-                             clause: ClauseIndex,
-                             literal: LiteralIndex,
-                             term: TermIndex)
-                             -> GenResult<Constant>
-        where R: Rng,
-              T: TruthValue;
-
-    fn choose_head_term<R, T>(&mut self,
-                              rng: &mut R,
-                              program: &Program<T>,
-                              clause: ClauseIndex)
-                              -> GenResult<TermIndex>
-        where R: Rng,
-              T: TruthValue;
-
-    fn choose_head_variable<R, T>(&mut self,
-                                  rng: &mut R,
-                                  program: &Program<T>,
-                                  clause: ClauseIndex,
-                                  term: TermIndex)
-                                  -> GenResult<Variable>
-        where R: Rng,
-              T: TruthValue;
-
-    fn choose_head_constant<R, T>(&mut self,
-                                  rng: &mut R,
-                                  program: &Program<T>,
-                                  clause: ClauseIndex,
-                                  term: TermIndex)
-                                  -> GenResult<Constant>
-        where R: Rng,
-              T: TruthValue;
-}
-
-struct UniformPlusKSelector {
-    k: i64,
-    max_predicate: Predicate,
-    max_constant: HashMap<(Predicate, TermIndex), Constant>,
-}
-
-impl UniformPlusKSelector {
-    fn new<T>(k: i64, program: &Program<T>, facts: &FactTable<T>) -> Self
-        where T: TruthValue
-    {
-        UniformPlusKSelector {
-            k,
-            max_predicate: program.num_predicates(),
-            max_constant: facts.max_constant_table(),
-        }
-    }
-
-    fn gen_range<R>(&self, rng: &mut R, end: usize) -> GenResult<usize>
-        where R: Rng
-    {
-        if end == 0 {
-            Err("Nothing to choose from.")
-        } else {
-            Ok(rng.gen_range(0, end))
-        }
-    }
-
-    fn gen_range_plus_k<R>(&self, rng: &mut R, base: usize) -> GenResult<usize>
-        where R: Rng
-    {
-        let end = base as i64 + self.k;
-        if end <= 0 {
-            Err("Nothing to choose from.")
-        } else {
-            Ok(rng.gen_range(0, end) as usize)
-        }
-    }
-}
-
-impl Selector for UniformPlusKSelector {
-    fn choose_predicate<R, T>(&mut self,
-                              rng: &mut R,
-                              program: &Program<T>,
-                              clause: ClauseIndex)
-                              -> GenResult<Predicate>
-        where R: Rng,
-              T: TruthValue
-    {
-        self.gen_range_plus_k(rng, program.num_predicates())
-    }
-
-    fn choose_clause<R, T>(&mut self, rng: &mut R, program: &Program<T>) -> GenResult<ClauseIndex>
-        where R: Rng,
-              T: TruthValue
-    {
-        self.gen_range(rng, program.num_clauses())
-    }
-
-    fn choose_literal<R, T>(&mut self,
-                            rng: &mut R,
-                            program: &Program<T>,
-                            clause: ClauseIndex)
-                            -> GenResult<LiteralIndex>
-        where R: Rng,
-              T: TruthValue
-    {
-        self.gen_range(rng, program.get_clause_by_idx(clause).body.len())
-    }
-
-    fn choose_term<R, T>(&mut self,
-                         rng: &mut R,
-                         program: &Program<T>,
-                         clause: ClauseIndex,
-                         literal: LiteralIndex)
-                         -> GenResult<TermIndex>
-        where R: Rng,
-              T: TruthValue
-    {
-        self.gen_range(rng,
-                       program.get_clause_by_idx(clause).body[literal]
-                           .terms
-                           .len())
-    }
-
-    fn choose_variable<R, T>(&mut self,
-                             rng: &mut R,
-                             program: &Program<T>,
-                             clause: ClauseIndex,
-                             literal: LiteralIndex,
-                             term: TermIndex)
-                             -> GenResult<Variable>
-        where R: Rng,
-              T: TruthValue
-    {
-        self.gen_range_plus_k(rng, program.get_clause_by_idx(clause).num_variables())
-    }
-
-
-    fn choose_constant<R, T>(&mut self,
-                             rng: &mut R,
-                             program: &Program<T>,
-                             clause: ClauseIndex,
-                             literal: LiteralIndex,
-                             term: TermIndex)
-                             -> GenResult<Constant>
-        where R: Rng,
-              T: TruthValue
-    {
-        let predicate = program.get_clause_by_idx(clause).body[literal].predicate;
-        let max_constant = self.max_constant
-            .get(&(predicate, term))
-            .cloned()
-            .unwrap_or(0);
-        self.gen_range_plus_k(rng, 1 + max_constant)
-    }
-
-    fn choose_head_term<R, T>(&mut self,
-                              rng: &mut R,
-                              program: &Program<T>,
-                              clause: ClauseIndex)
-                              -> GenResult<TermIndex>
-        where R: Rng,
-              T: TruthValue
-    {
-        self.gen_range(rng,
-                       program
-                           .get_clause_by_idx(clause)
-                           .head
-                           .as_ref()
-                           .unwrap()
-                           .terms
-                           .len())
-    }
-
-    fn choose_head_variable<R, T>(&mut self,
-                                  rng: &mut R,
-                                  program: &Program<T>,
-                                  clause: ClauseIndex,
-                                  term: TermIndex)
-                                  -> GenResult<Variable>
-        where R: Rng,
-              T: TruthValue
-    {
-        let num_variables = program.get_clause_by_idx(clause).num_variables();
-        self.gen_range(rng, num_variables)
-    }
-
-    fn choose_head_constant<R, T>(&mut self,
-                                  rng: &mut R,
-                                  program: &Program<T>,
-                                  clause: ClauseIndex,
-                                  term: TermIndex)
-                                  -> GenResult<Constant>
-        where R: Rng,
-              T: TruthValue
-    {
-        let predicate = program
-            .get_clause_by_idx(clause)
-            .head
-            .as_ref()
-            .unwrap()
-            .predicate;
-        let max_constant = self.max_constant
-            .get(&(predicate, term))
-            .cloned()
-            .unwrap_or(0);
-        self.gen_range_plus_k(rng, 1 + max_constant)
-    }
-}
+pub type GenResult<T> = Result<T, &'static str>;
 
 impl MutationOpGenerator {
     pub fn uniform() -> Self {
@@ -491,12 +257,12 @@ impl MutationOpGenerator {
         }
     }
 
-    fn generate_head<R, S, T>(&self,
-                              rng: &mut R,
-                              selector: &mut S,
-                              program: &Program<T>,
-                              clause: ClauseIndex)
-                              -> GenResult<HeadMutationOp>
+    pub fn generate_head<R, S, T>(&self,
+                                  rng: &mut R,
+                                  selector: &mut S,
+                                  program: &Program<T>,
+                                  clause: ClauseIndex)
+                                  -> GenResult<HeadMutationOp>
         where R: Rng,
               S: Selector,
               T: TruthValue
@@ -543,12 +309,12 @@ impl MutationOpGenerator {
     }
 
 
-    fn generate_body<R, S, T>(&self,
-                              rng: &mut R,
-                              selector: &mut S,
-                              program: &Program<T>,
-                              clause: ClauseIndex)
-                              -> GenResult<BodyMutationOp>
+    pub fn generate_body<R, S, T>(&self,
+                                  rng: &mut R,
+                                  selector: &mut S,
+                                  program: &Program<T>,
+                                  clause: ClauseIndex)
+                                  -> GenResult<BodyMutationOp>
         where R: Rng,
               S: Selector,
               T: TruthValue
@@ -659,12 +425,12 @@ impl MutationOpGenerator {
 
 #[cfg(test)]
 mod tests {
-    use super::{BodyMutationOp, HeadMutationOp, MutationOpGenerator, MutationState, Selector,
-                UniformPlusKSelector};
+    use super::{BodyMutationOp, HeadMutationOp, MutationOpGenerator, MutationState};
     use parser::program;
     use rand::SeedableRng;
     use rand::XorShiftRng;
     use truth_value::MaxFloat64;
+    use uniform_selector::UniformPlusKSelector;
 
     #[test]
     fn can_use_body_good_op() {
@@ -732,7 +498,7 @@ mod tests {
 
     #[test]
     fn can_generate_mutations() {
-        let mut gen = MutationOpGenerator::uniform();
+        let gen = MutationOpGenerator::uniform();
         let mut rng = XorShiftRng::from_seed([0xde, 0xad, 0xbe, 0xef]);
         let (facts, program, _) = program::<MaxFloat64>(r#"
         a(0) :- a(0)
@@ -751,7 +517,7 @@ mod tests {
 
     #[test]
     fn do_mutations() {
-        let mut gen = MutationOpGenerator::uniform();
+        let gen = MutationOpGenerator::uniform();
         let mut rng = XorShiftRng::from_seed([0xde, 0xad, 0xbe, 0xef]);
         let (facts, mut program, _) = program::<MaxFloat64>(r#"
         a(0) :- a(0)

@@ -89,26 +89,31 @@ impl<R, T> Refiner<R, T>
             if let Ok(clause_idx) = constraint.choose_clause(&mut self.rng, &self.program) {
                 let mut clause = self.program.get_clause_by_idx(clause_idx).clone();
                 let mut state = MutationState::new(&clause);
-                if let Ok(body_op) = gen.generate_body(&mut self.rng,
-                                                       &mut constraint,
-                                                       &self.program,
-                                                       0) {
-                    state.checked_apply_body_mut_op(body_op,
-                                                    &mut clause,
-                                                    &mut self.rng,
-                                                    &self.program);
+                let mut success = false;
+                for _ in 0..10 {
+                    if let Ok(body_op) = gen.generate_body(&mut self.rng,
+                                                           &mut constraint,
+                                                           &self.program,
+                                                           0) {
+                        success |= state.checked_apply_body_mut_op(body_op,
+                                                                   &mut clause,
+                                                                   &mut self.rng,
+                                                                   &self.program);
 
+                    }
+                    if let Ok(head_op) = gen.generate_head(&mut self.rng,
+                                                           &mut constraint,
+                                                           &self.program,
+                                                           0) {
+                        success |= state.checked_apply_head_mut_op(head_op,
+                                                                   &mut clause,
+                                                                   &mut self.rng,
+                                                                   &self.program);
+                    }
                 }
-                if let Ok(head_op) = gen.generate_head(&mut self.rng,
-                                                       &mut constraint,
-                                                       &self.program,
-                                                       0) {
-                    state.checked_apply_head_mut_op(head_op,
-                                                    &mut clause,
-                                                    &mut self.rng,
-                                                    &self.program);
+                if success {
+                    self.program.push_clause_simple(clause);
                 }
-                self.program.push_clause_simple(clause);
             }
         }
     }
@@ -168,10 +173,10 @@ impl<R, T> Refiner<R, T>
         for _ in 0..iterations {
             print!(".");
             io::stdout().flush().unwrap();
-            self.add_clauses();
             let adjustments = self.fit_weights();
             self.reconstrain(adjustments);
             self.reduce_clauses();
+            self.add_clauses();
         }
         println!();
     }
@@ -215,6 +220,7 @@ mod tests {
 
     #[test]
     fn can_refine_conjunction() {
+        // Try to refine a(X) :- b(X), c(X)
         let rng = XorShiftRng::from_seed([0xde, 0xad, 0xbe, 0xef]);
         let (facts, program, samples) = program::<MaxFloat64>(r#"
         types(0) :- a(0), b(0), c(0)
@@ -233,16 +239,13 @@ mod tests {
             c(3)
         output
             a(3).
-        sample
-            b(2),
-            c(3)
-        output
-            types(0).
         "#)
                 .unwrap()
                 .0;
         let mut refiner = Refiner::new(rng, facts, program, samples);
-        refiner.iterate(5);
-        println!("program = {}", refiner.get_program());
+        for _ in 0..5 {
+            refiner.iterate(1);
+            println!("program = {}", refiner.get_program());
+        }
     }
 }

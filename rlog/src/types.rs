@@ -67,12 +67,30 @@ impl Clause {
     }
 
     pub fn is_valid(&self) -> bool {
-        for var in 0..self.num_output_variables() {
-            if !self.contains_variable_in_body(var) {
-                return false;
+        if let Some(ref head) = self.head {
+            for term in &head.terms {
+                if let &Term::Variable(var) = term {
+                    if !self.contains_variable_in_body(var) {
+                        return false;
+                    }
+                }
             }
         }
         return true;
+    }
+
+    pub fn max_output_variable(&self) -> usize {
+        let mut max = 0;
+        if let Some(ref head) = self.head {
+            for term in &head.terms {
+                if let &Term::Variable(var) = term {
+                    if var > max {
+                        max = var;
+                    }
+                }
+            }
+        }
+        return max;
     }
 
     pub fn num_output_variables(&self) -> usize {

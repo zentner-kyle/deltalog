@@ -2,14 +2,13 @@ use bottom_up::evaluate_bottom_up;
 use fact_table::FactTable;
 use generate::Generator;
 use mutate::{MutationOpGenerator, MutationState};
-use name_table::NameTable;
 use optimize::{Adjustment, compute_adjustments};
 use program::Program;
 use rand::{Rng, XorShiftRng};
 use reconstrain::compute_constraint_measure;
 use selector::Selector;
-use std::io;
-use std::io::Write;
+use std::cmp::Ordering;
+use std::cmp::PartialOrd;
 use std::mem::swap;
 use truth_value::TruthValue;
 
@@ -27,10 +26,10 @@ pub struct Refiner<R, T>
     max_new_body_len: usize,
     max_new_predicate_terms: usize,
     step_iterations: usize,
-    clause_weight_cutoff_coeff: f64,
     num_random_clauses_to_add: usize,
     num_mutated_clauses_to_add: usize,
     default_clause_weight: T::Dual,
+    max_num_clauses: usize,
 }
 
 impl<R, T> Refiner<R, T>
@@ -56,10 +55,10 @@ impl<R, T> Refiner<R, T>
             max_new_body_len: 3,
             max_new_predicate_terms: 3,
             step_iterations: 100,
-            clause_weight_cutoff_coeff: 1.0,
             num_random_clauses_to_add: 5,
             num_mutated_clauses_to_add: 5,
             default_clause_weight: default_clause_weight,
+            max_num_clauses: 10,
         }
     }
 
@@ -112,6 +111,7 @@ impl<R, T> Refiner<R, T>
                     }
                 }
                 if success {
+                    clause.canonicalize_in_place();
                     self.program.push_clause_simple(clause);
                 }
             }
@@ -129,32 +129,32 @@ impl<R, T> Refiner<R, T>
                                  .gen_clause(self.max_new_body_len,
                                              self.max_new_predicate_terms),
                              self.default_clause_weight.clone(),
-                             NameTable::new())
+                             None)
                 .unwrap();
         }
     }
 
     pub fn reduce_clauses(&mut self) {
-        let mean_weight = self.program.mean_weight();
+        let mut clauses_to_keep = (0..self.program.num_clauses()).collect::<Vec<_>>();
+        clauses_to_keep.sort_by(|a, b| {
+                                    let a_weight = T::dual_mag(self.program.clause_weight(*a));
+                                    let b_weight = T::dual_mag(self.program.clause_weight(*b));
+                                    b_weight
+                                        .partial_cmp(&a_weight)
+                                        .unwrap_or(Ordering::Equal)
+                                });
+        clauses_to_keep.truncate(self.max_num_clauses);
         let mut program = Program::new();
         swap(&mut program, &mut self.program);
         self.program.predicate_names = program.predicate_names.clone();
-        for (clause_idx, (clause, weight)) in
-            program
-                .clause_iter()
-                .cloned()
-                .zip(program.clause_weights.iter().cloned())
-                .enumerate() {
-            if T::dual_less(&mean_weight, &weight, self.clause_weight_cutoff_coeff) {
-                let clause_var_names = program
-                    .clause_variable_names
-                    .get(&clause_idx)
-                    .cloned()
-                    .unwrap_or_else(|| NameTable::new());
-                self.program
-                    .push_clause(clause, weight, clause_var_names)
-                    .unwrap();
-            }
+        for clause_idx in clauses_to_keep {
+            let clause = program.get_clause_by_idx(clause_idx);
+            let mut weight = program.clause_weight(clause_idx).clone();
+            let clause_var_names = program.clause_variable_names.get(&clause_idx).cloned();
+            T::dual_adjust(&mut weight, &T::dual_default(), -0.1);
+            self.program
+                .push_clause(clause.clone(), weight, clause_var_names)
+                .unwrap();
         }
         self.check_num_fact_terms();
     }
@@ -171,11 +171,13 @@ impl<R, T> Refiner<R, T>
 
     pub fn iterate(&mut self, iterations: usize) {
         for _ in 0..iterations {
-            print!(".");
-            io::stdout().flush().unwrap();
+            println!("computing adjustment");
             let adjustments = self.fit_weights();
+            println!("reconstraining");
             self.reconstrain(adjustments);
+            println!("reducing clauses");
             self.reduce_clauses();
+            println!("adding clauses");
             self.add_clauses();
         }
         println!();
@@ -214,7 +216,7 @@ mod tests {
                 .unwrap()
                 .0;
         let mut refiner = Refiner::new(rng, facts, program, samples);
-        refiner.iterate(10);
+        refiner.iterate(2);
         println!("program = {}", refiner.get_program());
     }
 
@@ -239,11 +241,15 @@ mod tests {
             c(3)
         output
             a(3).
+        sample
+            b(1),
+            c(2)
+        output.
         "#)
                 .unwrap()
                 .0;
         let mut refiner = Refiner::new(rng, facts, program, samples);
-        for _ in 0..5 {
+        for _ in 0..2 {
             refiner.iterate(1);
             println!("program = {}", refiner.get_program());
         }

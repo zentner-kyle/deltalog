@@ -1,5 +1,7 @@
 use name_table::NameTable;
+use std::collections::HashMap;
 use std::fmt;
+use util::hash_map_get_or_insert_len;
 
 pub type Predicate = usize;
 pub type Constant = usize;
@@ -167,7 +169,6 @@ impl Clause {
         return max;
     }
 
-
     pub fn max_predicate(&self) -> Predicate {
         let mut max = 0;
         if let Some(ref head) = self.head {
@@ -183,9 +184,30 @@ impl Clause {
         return max;
     }
 
+    pub fn canonicalize_in_place(&mut self) {
+        let mut var_map = HashMap::new();
+        for term in self.head
+                .as_mut()
+                .expect("Can only canonicalize clause with a head.")
+                .terms
+                .iter_mut() {
+            if let Term::Variable(ref mut varb) = *term {
+                *varb = hash_map_get_or_insert_len(&mut var_map, *varb);
+            }
+        }
+        self.body.sort_by_key(|lit| lit.predicate);
+        for lit in self.body.iter_mut() {
+            for term in lit.terms.iter_mut() {
+                if let Term::Variable(ref mut varb) = *term {
+                    *varb = hash_map_get_or_insert_len(&mut var_map, *varb);
+                }
+            }
+        }
+    }
+
     pub fn format(&self,
                   f: &mut fmt::Formatter,
-                  var_names: &NameTable,
+                  var_names: Option<&NameTable>,
                   pred_names: &NameTable)
                   -> Result<(), fmt::Error> {
         if let Some(ref head) = self.head {
@@ -251,7 +273,7 @@ impl Literal {
 
     pub fn format(&self,
                   f: &mut fmt::Formatter,
-                  var_names: &NameTable,
+                  var_names: Option<&NameTable>,
                   pred_names: &NameTable)
                   -> Result<(), fmt::Error> {
         if let Some(name) = pred_names.get_name(self.predicate) {
@@ -309,13 +331,16 @@ impl<'a, 'b> fmt::Display for FactDisplayer<'a, 'b> {
 }
 
 impl Term {
-    pub fn format(&self, f: &mut fmt::Formatter, var_names: &NameTable) -> Result<(), fmt::Error> {
+    pub fn format(&self,
+                  f: &mut fmt::Formatter,
+                  var_names: Option<&NameTable>)
+                  -> Result<(), fmt::Error> {
         match self {
             &Term::Constant(cst) => {
                 write!(f, "{}", cst)?;
             }
             &Term::Variable(var) => {
-                if let Some(name) = var_names.get_name(var) {
+                if let Some(name) = var_names.and_then(|names| names.get_name(var)) {
                     write!(f, "{}", name)?;
                 } else {
                     write!(f, "Var#{}", var)?;

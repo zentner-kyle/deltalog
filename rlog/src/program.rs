@@ -44,6 +44,10 @@ impl<T> Program<T>
         }
     }
 
+    pub fn clause_weight(&self, clause_idx: ClauseIndex) -> &T::Dual {
+        &self.clause_weights[clause_idx]
+    }
+
     pub fn num_predicates(&self) -> usize {
         let mut count = 0;
         for clause in self.clauses.iter() {
@@ -123,14 +127,14 @@ impl<T> Program<T>
     }
 
     pub fn push_clause_simple(&mut self, clause: Clause) {
-        self.push_clause(clause, T::dual_default(), NameTable::new())
+        self.push_clause(clause, T::dual_default(), None)
             .unwrap();
     }
 
     pub fn push_clause(&mut self,
                        clause: Clause,
                        weight: T::Dual,
-                       var_names: NameTable)
+                       var_names: Option<NameTable>)
                        -> Result<(), &'static str> {
         let clause_idx = self.clauses.len();
         if let Some(ref head) = clause.head {
@@ -149,10 +153,13 @@ impl<T> Program<T>
         }
         self.clauses.push(clause);
         self.clause_weights.push(weight);
-        self.clause_variable_names.insert(clause_idx, var_names);
+        if let Some(var_names) = var_names {
+            self.clause_variable_names.insert(clause_idx, var_names);
+        }
         return Ok(());
     }
 
+    #[allow(dead_code)]
     pub fn mean_weight(&self) -> T::Dual {
         let num_weights = self.clause_weights.len();
         let amount_per_weight = 1f64 / num_weights as f64;
@@ -183,9 +190,7 @@ impl<T> fmt::Display for Program<T>
                 .unwrap_or_else(|| T::dual_default());
             write!(f, "{}", T::dual_as_datalog(&weight))?;
             clause
-                .format(f,
-                        self.clause_variable_names.get(&i).unwrap(),
-                        &self.predicate_names)?;
+                .format(f, self.clause_variable_names.get(&i), &self.predicate_names)?;
             write!(f, "\n")?;
         }
         return Ok(());

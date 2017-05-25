@@ -75,7 +75,16 @@ impl MutationState {
 
     fn can_use_body_mut_op(&self, body_op: BodyMutationOp, clause: &Clause) -> bool {
         match body_op {
-            BodyMutationOp::Swap(_, _) |
+            BodyMutationOp::Swap((lit_a, term_a), (lit_b, term_b)) => {
+                if lit_a >= clause.body.len() || lit_b >= clause.body.len() {
+                    false
+                } else if term_a >= clause.body[lit_a].terms.len() ||
+                          term_b >= clause.body[lit_b].terms.len() {
+                    false
+                } else {
+                    true
+                }
+            }
             BodyMutationOp::InsertLiteral(_) => true,
             BodyMutationOp::BindConstant((lit_idx, term_idx), _) |
             BodyMutationOp::BindVariable((lit_idx, term_idx), _) => {
@@ -134,6 +143,9 @@ impl MutationState {
         if self.can_use_body_mut_op(body_op, clause) {
             let old_clause = clause.clone();
             self.apply_body_mut_op(body_op, clause, rng, program);
+            if !clause.is_valid() {
+                println!("{:#?} \n {:#?} \n {:#?}", self, old_clause, body_op);
+            }
             assert!(clause.is_valid());
             true
         } else {
@@ -204,6 +216,16 @@ impl MutationState {
                             self.out_var_supports[varb].remove(&(lit_idx, term_idx));
                         }
                     }
+                }
+                for supports in &mut self.out_var_supports {
+                    let mut out_supports = HashSet::with_capacity(supports.len());
+                    for (mut l_idx, term_idx) in supports.drain() {
+                        if l_idx > lit_idx {
+                            l_idx -= 1;
+                        }
+                        out_supports.insert((l_idx, term_idx));
+                    }
+                    *supports = out_supports;
                 }
                 clause.body.remove(lit_idx);
             }

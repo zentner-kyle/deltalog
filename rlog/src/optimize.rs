@@ -158,7 +158,6 @@ pub fn compute_adjustments<T>(program: &Program<T>,
 mod tests {
     use super::compute_adjustments;
     use fact_table::FactTable;
-    use name_table::NameTable;
     use program::Program;
     use truth_value::{MaxFloat64, MaxFloat64Dual};
     use types::{Clause, Fact, Literal, Term};
@@ -172,7 +171,7 @@ mod tests {
                                               vec![Literal::new_from_vec(0,
                                                                          vec![Term::Variable(0)])]),
                          MaxFloat64Dual(0.0),
-                         NameTable::new())
+                         None)
             .unwrap();
         let mut facts = FactTable::<MaxFloat64>::new();
         // a(2)
@@ -200,13 +199,13 @@ mod tests {
                                               vec![Literal::new_from_vec(1,
                                                                          vec![Term::Variable(0)])]),
                          MaxFloat64Dual(0.1),
-                         NameTable::new())
+                         None)
             .unwrap();
         prg.push_clause(Clause::new_from_vec(Literal::new_from_vec(1, vec![Term::Variable(0)]),
                                               vec![Literal::new_from_vec(2,
                                                                          vec![Term::Variable(0)])]),
                          MaxFloat64Dual(0.1),
-                         NameTable::new())
+                         None)
             .unwrap();
         let mut facts = FactTable::<MaxFloat64>::new();
         // c(2)

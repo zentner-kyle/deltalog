@@ -261,7 +261,7 @@ fn fact_list<'a, 'b, T>(src: &'a str,
             rest = r;
             results.set(fact, T::default());
         } else {
-            return err_msg("Unexpected character in fact list", rest);
+            return Ok((results, rest));
         }
         rest = skip_whitespace(rest);
         if let Ok((_, r)) = character(rest, ',') {
@@ -400,7 +400,7 @@ pub fn program<T>(source: &str)
             };
             if clause.is_valid() {
                 program
-                    .push_clause(clause, current_weight.clone(), var_names)
+                    .push_clause(clause, current_weight.clone(), Some(var_names))
                     .expect("condition should already have been checked");
             } else {
                 return err_msg("Invalid clause", start_of_clause);

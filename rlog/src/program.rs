@@ -12,7 +12,7 @@ pub struct Program<T>
 {
     clauses: Vec<Clause>,
     clauses_for_predicate: HashMap<Predicate, Vec<ClauseIndex>>,
-    pub clause_weights: Vec<T::Dual>,
+    clause_weights: Vec<T::Dual>,
     pub predicate_names: NameTable,
     pub clause_variable_names: HashMap<ClauseIndex, NameTable>,
     pub predicate_num_terms: HashMap<Predicate, usize>,
@@ -47,6 +47,11 @@ impl<T> Program<T>
     pub fn clause_weight(&self, clause_idx: ClauseIndex) -> &T::Dual {
         &self.clause_weights[clause_idx]
     }
+
+    pub fn clause_weight_mut(&mut self, clause_idx: ClauseIndex) -> &mut T::Dual {
+        &mut self.clause_weights[clause_idx]
+    }
+
 
     pub fn num_predicates(&self) -> usize {
         let mut count = 0;

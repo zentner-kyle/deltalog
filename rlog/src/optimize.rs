@@ -28,7 +28,7 @@ use truth_value::TruthValue;
 /// w[j] is binds.truth()
 /// v[LAST, j] is binds.unfinalized_truth()
 /// u[i] is facts.get(&binds.solidify(clause.body[i])), i.e. the truth of the i'th clause input
-/// q is, program.clause_weights[clause_idx], the weight of the clause
+/// q is, program.clause_weight(clause_idx), the weight of the clause
 /// z is facts.get(&fact)
 /// x[LAST] is facts.get(&fact)
 /// x[j - 1] is T::either(x_last, binds.truth()) (either x[j], w[j])
@@ -67,14 +67,14 @@ pub fn gradient_step<T>(program: &Program<T>,
             let mut x_last = z;
             let mut gx_last = gz.clone();
             for (clause_idx, binds) in causes {
-                let q = &program.clause_weights[clause_idx];
+                let q = program.clause_weight(clause_idx);
                 let w = binds.truth();
                 let v_last = binds.unfinalized_truth();
                 let x = T::either(&x_last, &w);
                 let (gw, gx) = T::back_either(&w, &x, &gx_last);
                 x_last = x;
                 gx_last = gx;
-                let (gq, mut gv_last) = T::back_finalize(&q, &v_last, &gw);
+                let (gq, mut gv_last) = T::back_finalize(q, &v_last, &gw);
                 clause_adjustments[clause_idx] = T::dual_sum(&clause_adjustments[clause_idx], &gq);
                 for literal in &program.get_clause_by_idx(clause_idx).body {
                     // TODO(zentner): Remove this allocation in the innermost loop.

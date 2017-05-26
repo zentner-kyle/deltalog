@@ -110,17 +110,14 @@ pub fn compute<T>(facts: &FactTable<T>, program: &Program<T>) -> FactTable<T>
     let mut this_iter = FactTable::new();
     loop {
         let mut fact_added_last_iter = false;
-        for ((clause_idx, clause), truth) in
-            program
-                .clause_iter()
-                .enumerate()
-                .zip(program.clause_weights.iter().cycle()) {
+        for (clause_idx, clause) in program.clause_iter().enumerate() {
+            let weight = program.clause_weight(clause_idx);
             let facts_to_add = match_clause(last_iter.as_ref(),
                                             Some(&result_facts),
                                             Some(&facts),
                                             clause,
                                             clause_idx,
-                                            truth);
+                                            weight);
             this_iter.merge_new_generation(facts_to_add);
         }
         if let Some(facts) = last_iter.take() {
@@ -185,7 +182,6 @@ mod tests {
         prg.push_clause_simple(Clause::new_from_vec(Literal::new_from_vec(1, vec![Term::Variable(0)]),
                                               vec![Literal::new_from_vec(2,
                                                                          vec![Term::Variable(0)])]));
-        prg.clause_weights.push(());
         let mut facts = FactTable::<()>::new();
         // c(2)
         let starting_fact = Fact::new_from_vec(2, vec![2]);

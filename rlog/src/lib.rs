@@ -84,7 +84,7 @@ impl<T> Context<T>
                                                     &self.samples,
                                                     STEP_ITERATIONS);
             for (clause_idx, adjustment) in res.clause_adjustments.iter().enumerate() {
-                T::dual_adjust(&mut self.program.clause_weights[clause_idx],
+                T::dual_adjust(self.program.clause_weight_mut(clause_idx),
                                adjustment,
                                learning_rate);
             }

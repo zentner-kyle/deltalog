@@ -70,7 +70,7 @@ impl<R, T> Refiner<R, T>
                                           &self.samples,
                                           self.step_iterations);
             for (clause_idx, adjustment) in res.clause_adjustments.iter().enumerate() {
-                T::dual_adjust(&mut self.program.clause_weights[clause_idx],
+                T::dual_adjust(self.program.clause_weight_mut(clause_idx),
                                adjustment,
                                self.learning_rate);
             }

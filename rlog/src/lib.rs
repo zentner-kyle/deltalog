@@ -1,7 +1,10 @@
 #[macro_use]
 extern crate log;
-extern crate unicode_xid;
+#[cfg(test)]
+#[macro_use]
+extern crate quickcheck;
 extern crate rand;
+extern crate unicode_xid;
 
 mod bindings;
 mod bottom_up;

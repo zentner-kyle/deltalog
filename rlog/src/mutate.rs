@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 
 use program::Program;
+#[cfg(test)]
+use quickcheck::{Arbitrary, Gen};
 use rand::Rng;
 use selector::Selector;
 use std::collections::HashSet;
@@ -29,10 +31,11 @@ impl MutationState {
     }
 
     fn can_use_head_mut_op(&self, head_op: HeadMutationOp, clause: &Clause) -> bool {
-        if let HeadMutationOp::BindVariable(_, varb) = head_op {
-            clause.contains_variable_in_body(varb)
-        } else {
-            true
+        match head_op {
+            HeadMutationOp::BindConstant(term_idx, _) => term_idx < clause.head.terms.len(),
+            HeadMutationOp::BindVariable(term_idx, varb) => {
+                term_idx < clause.head.terms.len() && clause.contains_variable_in_body(varb)
+            }
         }
     }
 
@@ -237,7 +240,6 @@ pub enum BodyMutationOp {
     InsertLiteral(Predicate),
     RemoveLiteral(LiteralIndex),
 }
-
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum HeadMutationOp {
@@ -489,14 +491,74 @@ impl MutationOpGenerator {
     }
 }
 
+
+#[cfg(test)]
+impl Arbitrary for HeadMutationOp {
+    fn arbitrary<G: Gen>(g: &mut G) -> Self {
+        let size = g.size();
+        match g.gen_range(0, 2) {
+            0 => HeadMutationOp::BindConstant(g.gen_range(0, size), g.gen_range(0, size)),
+            1 => HeadMutationOp::BindVariable(g.gen_range(0, size), g.gen_range(0, size)),
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[cfg(test)]
+impl Arbitrary for BodyMutationOp {
+    fn arbitrary<G: Gen>(g: &mut G) -> Self {
+        let size = g.size();
+        match g.gen_range(0, 5) {
+            0 => {
+                BodyMutationOp::Swap((g.gen_range(0, size), g.gen_range(0, size)),
+                                     (g.gen_range(0, size), g.gen_range(0, size)))
+            }
+            1 => {
+                BodyMutationOp::BindConstant((g.gen_range(0, size), g.gen_range(0, size)),
+                                             g.gen_range(0, size))
+            }
+            2 => {
+                BodyMutationOp::BindVariable((g.gen_range(0, size), g.gen_range(0, size)),
+                                             g.gen_range(0, size))
+            }
+            3 => BodyMutationOp::InsertLiteral(g.gen_range(0, size)),
+            4 => BodyMutationOp::RemoveLiteral(g.gen_range(0, size)),
+            _ => unreachable!(),
+        }
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::{BodyMutationOp, HeadMutationOp, MutationOpGenerator, MutationState};
     use parser::program;
     use rand::SeedableRng;
     use rand::XorShiftRng;
+    use std::cmp::max;
     use truth_value::MaxFloat64;
     use uniform_selector::UniformPlusKSelector;
+
+    quickcheck! {
+        fn clause_valid_after_operations(head_ops: Vec<HeadMutationOp>, body_ops: Vec<BodyMutationOp>) -> () {
+            let mut rng = XorShiftRng::from_seed([0xde, 0xad, 0xbe, 0xef]);
+            let (_, program, _) = program::<MaxFloat64>(r#"
+            a(0) :- a(0), b(1)
+            "#)
+                    .unwrap()
+                    .0;
+            let mut clause = program.get_clause_by_idx(0).clone();
+            let mut state = MutationState::new(&clause);
+            for i in 0..max(head_ops.len(), body_ops.len()) {
+                if i < head_ops.len() {
+                    state.checked_apply_head_mut_op(head_ops[i], &mut clause, &mut rng, &program);
+                }
+                if i < body_ops.len() {
+                    state.checked_apply_body_mut_op(body_ops[i], &mut clause, &mut rng, &program);
+                }
+            }
+        }
+    }
 
     #[test]
     fn can_use_body_good_op() {

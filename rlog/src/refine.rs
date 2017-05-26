@@ -150,7 +150,10 @@ impl<R, T> Refiner<R, T>
         for clause_idx in clauses_to_keep {
             let clause = program.get_clause_by_idx(clause_idx);
             let mut weight = program.clause_weight(clause_idx).clone();
-            let clause_var_names = program.clause_variable_names.get(&clause_idx).cloned();
+            let clause_var_names = program
+                .clause_variable_names()
+                .get(&clause_idx)
+                .cloned();
             T::dual_adjust(&mut weight, &T::dual_default(), -0.1);
             self.program
                 .push_clause(clause.clone(), weight, clause_var_names)

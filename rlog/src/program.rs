@@ -14,7 +14,7 @@ pub struct Program<T>
     clauses_for_predicate: HashMap<Predicate, Vec<ClauseIndex>>,
     clause_weights: Vec<T::Dual>,
     predicate_names: NameTable,
-    pub clause_variable_names: HashMap<ClauseIndex, NameTable>,
+    clause_variable_names: HashMap<ClauseIndex, NameTable>,
     pub predicate_num_terms: HashMap<Predicate, usize>,
 }
 
@@ -187,6 +187,10 @@ impl<T> Program<T>
 
     pub fn predicate_names_mut(&mut self) -> &mut NameTable {
         &mut self.predicate_names
+    }
+
+    pub fn clause_variable_names(&self) -> &HashMap<ClauseIndex, NameTable> {
+        &self.clause_variable_names
     }
 }
 

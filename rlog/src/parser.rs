@@ -373,7 +373,7 @@ pub fn program<T>(source: &str)
         let (head, r) = literal(rest,
                                 &mut var_names,
                                 &mut predicate_names,
-                                &mut program.predicate_num_terms)?;
+                                program.predicate_num_terms_mut())?;
         rest = r;
         rest = skip_whitespace(rest);
         if let Ok((_, r)) = prefix(rest, ":-") {
@@ -384,7 +384,7 @@ pub fn program<T>(source: &str)
                 let (lit, r) = literal(rest,
                                        &mut var_names,
                                        &mut predicate_names,
-                                       &mut program.predicate_num_terms)?;
+                                       program.predicate_num_terms_mut())?;
                 rest = r;
                 literals.push(lit);
                 rest = skip_whitespace(rest);

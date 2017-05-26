@@ -27,7 +27,7 @@ impl<R> Generator<R>
         let mut result = Generator {
             rng: rng,
             max_predicate: max_predicate,
-            num_terms: program.predicate_num_terms.clone(),
+            num_terms: program.predicate_num_terms().clone(),
             max_constant: max_constant,
         };
         result.update_max_constant(facts);
@@ -37,7 +37,7 @@ impl<R> Generator<R>
     pub fn update_num_terms<T>(&mut self, program: &Program<T>)
         where T: TruthValue
     {
-        self.num_terms = program.predicate_num_terms.clone();
+        self.num_terms = program.predicate_num_terms().clone();
     }
 
     pub fn update_max_constant<T>(&mut self, facts: &FactTable<T>)

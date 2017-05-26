@@ -15,7 +15,7 @@ pub struct Program<T>
     clause_weights: Vec<T::Dual>,
     predicate_names: NameTable,
     clause_variable_names: HashMap<ClauseIndex, NameTable>,
-    pub predicate_num_terms: HashMap<Predicate, usize>,
+    predicate_num_terms: HashMap<Predicate, usize>,
 }
 
 pub struct ClauseIter<'a> {
@@ -191,6 +191,14 @@ impl<T> Program<T>
 
     pub fn clause_variable_names(&self) -> &HashMap<ClauseIndex, NameTable> {
         &self.clause_variable_names
+    }
+
+    pub fn predicate_num_terms(&self) -> &HashMap<Predicate, usize> {
+        &self.predicate_num_terms
+    }
+
+    pub fn predicate_num_terms_mut(&mut self) -> &mut HashMap<Predicate, usize> {
+        &mut self.predicate_num_terms
     }
 }
 

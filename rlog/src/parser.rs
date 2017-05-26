@@ -339,14 +339,16 @@ pub fn program<T>(source: &str)
     let mut current_weight = T::dual_default();
     let mut current_confidence = T::default();
     let mut samples: Vec<(FactTable<T>, FactTable<T>)> = Vec::new();
+    let mut predicate_names = NameTable::new();
     loop {
         rest = skip_whitespace(rest);
         if rest.len() == 0 {
             facts.extend_num_predicates(program.num_predicates());
+            *program.predicate_names_mut() = predicate_names;
             return Ok(((facts, program, samples), rest));
         }
         let start_of_clause = rest;
-        if let Ok((sample, r)) = sample(rest, &mut program.predicate_names) {
+        if let Ok((sample, r)) = sample(rest, &mut predicate_names) {
             program
                 .check_num_fact_terms(&sample.0)
                 .map_err(|s| err_from_str(s, rest))?;
@@ -370,7 +372,7 @@ pub fn program<T>(source: &str)
         let mut var_names = NameTable::new();
         let (head, r) = literal(rest,
                                 &mut var_names,
-                                &mut program.predicate_names,
+                                &mut predicate_names,
                                 &mut program.predicate_num_terms)?;
         rest = r;
         rest = skip_whitespace(rest);
@@ -381,7 +383,7 @@ pub fn program<T>(source: &str)
             loop {
                 let (lit, r) = literal(rest,
                                        &mut var_names,
-                                       &mut program.predicate_names,
+                                       &mut predicate_names,
                                        &mut program.predicate_num_terms)?;
                 rest = r;
                 literals.push(lit);

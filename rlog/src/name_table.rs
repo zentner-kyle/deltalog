@@ -39,6 +39,7 @@ impl NameTable {
         result
     }
 
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         return self.next_index;
     }

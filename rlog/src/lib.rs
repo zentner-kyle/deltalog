@@ -67,7 +67,7 @@ impl<T> Context<T>
 
     pub fn facts_as_string(&mut self) -> String {
         bottom_up::evaluate_bottom_up(&mut self.facts, &self.program);
-        return self.facts.as_datalog(&self.program.predicate_names);
+        return self.facts.as_datalog(self.program.predicate_names());
     }
 
     pub fn program_as_string(&self) -> String {

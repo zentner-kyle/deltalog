@@ -146,7 +146,7 @@ impl<R, T> Refiner<R, T>
         clauses_to_keep.truncate(self.max_num_clauses);
         let mut program = Program::new();
         swap(&mut program, &mut self.program);
-        self.program.predicate_names = program.predicate_names.clone();
+        *self.program.predicate_names_mut() = program.predicate_names().clone();
         for clause_idx in clauses_to_keep {
             let clause = program.get_clause_by_idx(clause_idx);
             let mut weight = program.clause_weight(clause_idx).clone();

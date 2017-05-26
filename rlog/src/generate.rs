@@ -22,7 +22,7 @@ impl<R> Generator<R>
     pub fn new<T>(rng: R, facts: &FactTable<T>, program: &Program<T>) -> Self
         where T: TruthValue
     {
-        let max_predicate = program.predicate_names.len();
+        let max_predicate = program.num_predicates();
         let max_constant = HashMap::new();
         let mut result = Generator {
             rng: rng,

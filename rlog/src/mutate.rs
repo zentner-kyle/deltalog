@@ -55,11 +55,7 @@ impl MutationState {
     }
 
     fn apply_head_mut_op(&mut self, head_op: HeadMutationOp, clause: &mut Clause) {
-        let head_terms = &mut clause
-                                  .head
-                                  .as_mut()
-                                  .expect("Can only mutate clauses with heads.")
-                                  .terms;
+        let head_terms = &mut clause.head.terms;
         match head_op {
             HeadMutationOp::BindConstant(term_idx, cst) => {
                 head_terms[term_idx] = Term::Constant(cst);

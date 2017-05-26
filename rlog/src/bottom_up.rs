@@ -54,8 +54,8 @@ fn match_clause<T>(last_iter: Option<&FactTable<T>>,
                 last_iter_source_count += 1;
                 fact_iters.push((default_source,
                                  default_table.iter(&clause.body[lit_idx + 1], binds)));
-            } else if let Some(ref head) = clause.head {
-                let fact = binds.solidify(head);
+            } else {
+                let fact = binds.solidify(&clause.head);
                 assert!(binds.all_variables_bound_in_clause(clause));
                 result_facts.add_match(fact, clause_idx, binds);
             }

@@ -230,12 +230,8 @@ impl Selector for ConstraintMeasure {
               T: TruthValue
     {
         let clause = program.get_clause_by_idx(clause);
-        let head = clause
-            .head
-            .as_ref()
-            .ok_or("Can only mutate clauses with heads.")?;
         let cumulative_demand = self.cumulative_unconstraint_demand
-            .get(&head.predicate)
+            .get(&clause.head.predicate)
             .ok_or("No demand for Predicate.")?;
         Ok(weighted_index_cumulative_array(rng, cumulative_demand))
     }

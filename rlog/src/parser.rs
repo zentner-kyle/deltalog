@@ -371,9 +371,7 @@ pub fn program<T>(source: &str)
         let (head, r) = literal(rest,
                                 &mut var_names,
                                 &mut program.predicate_names,
-                                &mut program.predicate_num_terms)
-                .map(|(lit, r)| (Some(lit), r))
-                .or_else(|_| character(rest, '?').map(|(_, r)| (None, r)))?;
+                                &mut program.predicate_num_terms)?;
         rest = r;
         rest = skip_whitespace(rest);
         if let Ok((_, r)) = prefix(rest, ":-") {
@@ -405,7 +403,7 @@ pub fn program<T>(source: &str)
             } else {
                 return err_msg("Invalid clause", start_of_clause);
             }
-        } else if let (Some(lit), Ok((_, r))) = (head, character(rest, '.')) {
+        } else if let (lit, Ok((_, r))) = (head, character(rest, '.')) {
             if var_names.to_reverse().len() != 0 {
                 return err_msg("Fact contained variables", start_of_clause);
             }

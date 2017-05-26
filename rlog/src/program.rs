@@ -137,15 +137,13 @@ impl<T> Program<T>
                        var_names: Option<NameTable>)
                        -> Result<(), &'static str> {
         let clause_idx = self.clauses.len();
-        if let Some(ref head) = clause.head {
-            self.check_num_terms(head)?;
-            match self.clauses_for_predicate.entry(head.predicate) {
-                Entry::Occupied(mut pair) => {
-                    pair.get_mut().push(clause_idx);
-                }
-                Entry::Vacant(pair) => {
-                    pair.insert(vec![clause_idx]);
-                }
+        self.check_num_terms(&clause.head)?;
+        match self.clauses_for_predicate.entry(clause.head.predicate) {
+            Entry::Occupied(mut pair) => {
+                pair.get_mut().push(clause_idx);
+            }
+            Entry::Vacant(pair) => {
+                pair.insert(vec![clause_idx]);
             }
         }
         for literal in &clause.body {

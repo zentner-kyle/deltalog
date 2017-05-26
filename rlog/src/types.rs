@@ -24,7 +24,7 @@ pub struct Literal {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Clause {
-    pub head: Option<Literal>,
+    pub head: Literal,
     pub body: Vec<Literal>,
 }
 
@@ -38,7 +38,7 @@ impl Clause {
     #[allow(dead_code)]
     pub fn new_from_vec(head: Literal, body: Vec<Literal>) -> Self {
         Clause {
-            head: Some(head),
+            head: head,
             body: body,
         }
     }
@@ -46,11 +46,9 @@ impl Clause {
     #[allow(dead_code)]
     pub fn num_times_head_uses_var(&self, variable: Variable) -> usize {
         let mut count = 0;
-        if let Some(ref head) = self.head {
-            for term in &head.terms {
-                if &Term::Variable(variable) == term {
-                    count += 1;
-                }
+        for term in &self.head.terms {
+            if &Term::Variable(variable) == term {
+                count += 1;
             }
         }
         return count;
@@ -58,23 +56,19 @@ impl Clause {
 
     #[allow(dead_code)]
     pub fn head_contains_var(&self, variable: Variable) -> bool {
-        if let Some(ref head) = self.head {
-            for term in &head.terms {
-                if &Term::Variable(variable) == term {
-                    return true;
-                }
+        for term in &self.head.terms {
+            if &Term::Variable(variable) == term {
+                return true;
             }
         }
         return false;
     }
 
     pub fn is_valid(&self) -> bool {
-        if let Some(ref head) = self.head {
-            for term in &head.terms {
-                if let &Term::Variable(var) = term {
-                    if !self.contains_variable_in_body(var) {
-                        return false;
-                    }
+        for term in &self.head.terms {
+            if let &Term::Variable(var) = term {
+                if !self.contains_variable_in_body(var) {
+                    return false;
                 }
             }
         }
@@ -83,12 +77,10 @@ impl Clause {
 
     pub fn max_output_variable(&self) -> usize {
         let mut max = 0;
-        if let Some(ref head) = self.head {
-            for term in &head.terms {
-                if let &Term::Variable(var) = term {
-                    if var > max {
-                        max = var;
-                    }
+        for term in &self.head.terms {
+            if let &Term::Variable(var) = term {
+                if var > max {
+                    max = var;
                 }
             }
         }
@@ -97,12 +89,10 @@ impl Clause {
 
     pub fn num_output_variables(&self) -> usize {
         let mut count = 0;
-        if let Some(ref head) = self.head {
-            for term in &head.terms {
-                if let &Term::Variable(var) = term {
-                    if var + 1 > count {
-                        count = var + 1;
-                    }
+        for term in &self.head.terms {
+            if let &Term::Variable(var) = term {
+                if var + 1 > count {
+                    count = var + 1;
                 }
             }
         }
@@ -126,10 +116,8 @@ impl Clause {
 
     #[allow(dead_code)]
     pub fn contains_variable(&self, variable: Variable) -> bool {
-        if let Some(ref head) = self.head {
-            if head.contains_variable(variable) {
-                return true;
-            }
+        if self.head.contains_variable(variable) {
+            return true;
         }
         if self.contains_variable_in_body(variable) {
             return true;
@@ -148,12 +136,10 @@ impl Clause {
 
     pub fn max_constant(&self) -> Constant {
         let mut max = 0;
-        if let Some(ref head) = self.head {
-            for term in &head.terms {
-                if let Term::Constant(cst) = *term {
-                    if cst > max {
-                        max = cst;
-                    }
+        for term in &self.head.terms {
+            if let Term::Constant(cst) = *term {
+                if cst > max {
+                    max = cst;
                 }
             }
         }
@@ -171,10 +157,8 @@ impl Clause {
 
     pub fn max_predicate(&self) -> Predicate {
         let mut max = 0;
-        if let Some(ref head) = self.head {
-            if head.predicate > max {
-                max = head.predicate;
-            }
+        if self.head.predicate > max {
+            max = self.head.predicate;
         }
         for lit in &self.body {
             if lit.predicate > max {
@@ -186,11 +170,7 @@ impl Clause {
 
     pub fn canonicalize_in_place(&mut self) {
         let mut var_map = HashMap::new();
-        for term in self.head
-                .as_mut()
-                .expect("Can only canonicalize clause with a head.")
-                .terms
-                .iter_mut() {
+        for term in &mut self.head.terms {
             if let Term::Variable(ref mut varb) = *term {
                 *varb = hash_map_get_or_insert_len(&mut var_map, *varb);
             }
@@ -210,12 +190,8 @@ impl Clause {
                   var_names: Option<&NameTable>,
                   pred_names: &NameTable)
                   -> Result<(), fmt::Error> {
-        if let Some(ref head) = self.head {
-            head.format(f, var_names, pred_names)?;
-            write!(f, " :- ")?;
-        } else {
-            write!(f, "? :- ")?;
-        }
+        self.head.format(f, var_names, pred_names)?;
+        write!(f, " :- ")?;
         for (i, literal) in self.body.iter().enumerate() {
             literal.format(f, var_names, pred_names)?;
             if i + 1 != self.body.len() {

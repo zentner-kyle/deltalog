@@ -132,14 +132,7 @@ impl Selector for UniformPlusKSelector {
         where R: Rng,
               T: TruthValue
     {
-        self.gen_range(rng,
-                       program
-                           .get_clause_by_idx(clause)
-                           .head
-                           .as_ref()
-                           .unwrap()
-                           .terms
-                           .len())
+        self.gen_range(rng, program.get_clause_by_idx(clause).head.terms.len())
     }
 
     fn choose_head_variable<R, T>(&mut self,
@@ -164,12 +157,7 @@ impl Selector for UniformPlusKSelector {
         where R: Rng,
               T: TruthValue
     {
-        let predicate = program
-            .get_clause_by_idx(clause)
-            .head
-            .as_ref()
-            .unwrap()
-            .predicate;
+        let predicate = program.get_clause_by_idx(clause).head.predicate;
         let max_constant = self.max_constant
             .get(&(predicate, term))
             .cloned()

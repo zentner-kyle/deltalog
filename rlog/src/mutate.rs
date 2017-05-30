@@ -13,10 +13,11 @@ use types::{Clause, ClauseIndex, Constant, Literal, LiteralIndex, Predicate, Ter
 #[derive(Clone, Debug)]
 pub struct MutationState {
     out_var_supports: Vec<HashSet<(LiteralIndex, TermIndex)>>,
+    max_literals: usize,
 }
 
 impl MutationState {
-    pub fn new(clause: &Clause) -> Self {
+    pub fn new(clause: &Clause, max_literals: usize) -> Self {
         let mut out_var_supports = vec![HashSet::new(); 1 + clause.max_output_variable()];
         for (lit_idx, literal) in clause.body.iter().enumerate() {
             for (term_idx, term) in literal.terms.iter().enumerate() {
@@ -27,7 +28,10 @@ impl MutationState {
                 }
             }
         }
-        MutationState { out_var_supports }
+        MutationState {
+            out_var_supports,
+            max_literals,
+        }
     }
 
     fn can_use_head_mut_op(&self, head_op: HeadMutationOp, clause: &Clause) -> bool {
@@ -84,7 +88,7 @@ impl MutationState {
                     true
                 }
             }
-            BodyMutationOp::InsertLiteral(_) => true,
+            BodyMutationOp::InsertLiteral(_) => clause.body.len() < self.max_literals,
             BodyMutationOp::BindConstant((lit_idx, term_idx), _) |
             BodyMutationOp::BindVariable((lit_idx, term_idx), _) => {
                 if lit_idx < clause.body.len() && term_idx < clause.body[lit_idx].terms.len() {
@@ -548,7 +552,7 @@ mod tests {
                     .unwrap()
                     .0;
             let mut clause = program.get_clause_by_idx(0).clone();
-            let mut state = MutationState::new(&clause);
+            let mut state = MutationState::new(&clause, 10);
             for i in 0..max(head_ops.len(), body_ops.len()) {
                 if i < head_ops.len() {
                     state.checked_apply_head_mut_op(head_ops[i], &mut clause, &mut rng, &program);
@@ -568,7 +572,7 @@ mod tests {
                 .unwrap()
                 .0;
         let clause = program.get_clause_by_idx(0);
-        let mut_state = MutationState::new(&clause);
+        let mut_state = MutationState::new(&clause, 10);
         assert!(mut_state.can_use_body_mut_op(BodyMutationOp::Swap((0, 0), (1, 0)), &clause));
         for lit in 0..2 {
             assert!(mut_state.can_use_body_mut_op(BodyMutationOp::RemoveLiteral(lit), &clause));
@@ -591,7 +595,7 @@ mod tests {
                 .unwrap()
                 .0;
         let clause = program.get_clause_by_idx(0);
-        let mut_state = MutationState::new(&clause);
+        let mut_state = MutationState::new(&clause, 10);
         assert!(mut_state.can_use_body_mut_op(BodyMutationOp::Swap((0, 0), (1, 0)), &clause));
         assert!(mut_state.can_use_body_mut_op(BodyMutationOp::RemoveLiteral(0), &clause));
         assert!(!mut_state.can_use_body_mut_op(BodyMutationOp::RemoveLiteral(1), &clause));
@@ -607,7 +611,7 @@ mod tests {
                 .unwrap()
                 .0;
         let clause = program.get_clause_by_idx(0);
-        let mut_state = MutationState::new(&clause);
+        let mut_state = MutationState::new(&clause, 10);
         assert!(mut_state.can_use_head_mut_op(HeadMutationOp::BindVariable(0, 0), &clause));
         assert!(mut_state.can_use_head_mut_op(HeadMutationOp::BindConstant(0, 1), &clause));
     }
@@ -620,7 +624,7 @@ mod tests {
                 .unwrap()
                 .0;
         let clause = program.get_clause_by_idx(0);
-        let mut_state = MutationState::new(&clause);
+        let mut_state = MutationState::new(&clause, 10);
         assert!(!mut_state.can_use_head_mut_op(HeadMutationOp::BindVariable(0, 0), &clause));
     }
 
@@ -655,7 +659,7 @@ mod tests {
         let mut selector = UniformPlusKSelector::new(1, &program, &facts);
         for _ in 0..100 {
             let mut clause = program.get_clause_by_idx(0).clone();
-            let mut mut_state = MutationState::new(&clause);
+            let mut mut_state = MutationState::new(&clause, 10);
             if let Ok(body_op) = gen.generate_body(&mut rng, &mut selector, &program, 0) {
                 mut_state.apply_body_mut_op(body_op, &mut clause, &mut rng, &program);
             }

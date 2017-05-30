@@ -30,6 +30,7 @@ pub struct Refiner<R, T>
     num_mutated_clauses_to_add: usize,
     default_clause_weight: T::Dual,
     max_num_clauses: usize,
+    max_num_literals: usize,
 }
 
 impl<R, T> Refiner<R, T>
@@ -59,6 +60,7 @@ impl<R, T> Refiner<R, T>
             num_mutated_clauses_to_add: 5,
             default_clause_weight: default_clause_weight,
             max_num_clauses: 10,
+            max_num_literals: 4,
         }
     }
 
@@ -87,7 +89,7 @@ impl<R, T> Refiner<R, T>
         for _ in 0..self.num_mutated_clauses_to_add {
             if let Ok(clause_idx) = constraint.choose_clause(&mut self.rng, &self.program) {
                 let mut clause = self.program.get_clause_by_idx(clause_idx).clone();
-                let mut state = MutationState::new(&clause);
+                let mut state = MutationState::new(&clause, self.max_num_literals);
                 let mut success = false;
                 for _ in 0..10 {
                     if let Ok(body_op) = gen.generate_body(&mut self.rng,
@@ -228,7 +230,7 @@ mod tests {
         // Try to refine a(X) :- b(X), c(X)
         let rng = XorShiftRng::from_seed([0xde, 0xad, 0xbe, 0xef]);
         let (facts, program, samples) = program::<MaxFloat64>(r#"
-        types(0) :- a(0), b(0), c(0)
+        a(0) :- b(0), c(0)
         sample
             b(1),
             c(1)

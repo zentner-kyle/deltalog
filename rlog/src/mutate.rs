@@ -10,7 +10,7 @@ use truth_value::TruthValue;
 use types::{Clause, ClauseIndex, Constant, Literal, LiteralIndex, Predicate, Term, TermIndex,
             Variable};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MutationState {
     out_var_supports: Vec<HashSet<(LiteralIndex, TermIndex)>>,
     max_literals: usize,
@@ -18,7 +18,7 @@ pub struct MutationState {
 
 impl MutationState {
     pub fn new(clause: &Clause, max_literals: usize) -> Self {
-        let mut out_var_supports = vec![HashSet::new(); 1 + clause.max_output_variable()];
+        let mut out_var_supports = vec![HashSet::new(); clause.num_output_variables()];
         for (lit_idx, literal) in clause.body.iter().enumerate() {
             for (term_idx, term) in literal.terms.iter().enumerate() {
                 if let Term::Variable(varb) = *term {
@@ -54,7 +54,8 @@ impl MutationState {
     {
         if self.can_use_head_mut_op(head_op, clause) {
             self.apply_head_mut_op(head_op, clause);
-            assert!(clause.is_valid());
+            let fresh_self = Self::new(clause, self.max_literals);
+            assert!(clause.is_valid() && *self == fresh_self);
             true
         } else {
             false
@@ -62,17 +63,34 @@ impl MutationState {
     }
 
     fn apply_head_mut_op(&mut self, head_op: HeadMutationOp, clause: &mut Clause) {
-        let head_terms = &mut clause.head.terms;
         match head_op {
             HeadMutationOp::BindConstant(term_idx, cst) => {
-                head_terms[term_idx] = Term::Constant(cst);
+                clause.head.terms[term_idx] = Term::Constant(cst);
             }
             HeadMutationOp::BindVariable(term_idx, varb) => {
-                head_terms[term_idx] = Term::Variable(varb);
+                clause.head.terms[term_idx] = Term::Variable(varb);
                 while varb >= self.out_var_supports.len() {
                     self.out_var_supports.push(HashSet::new());
                 }
+                for (lit_idx, literal) in clause.body.iter().enumerate() {
+                    for (term_idx, term) in literal.terms.iter().enumerate() {
+                        if let Term::Variable(varb) = *term {
+                            if clause.head_contains_var(varb) {
+                                self.out_var_supports[varb].insert((lit_idx, term_idx));
+                            }
+                        }
+                    }
+                }
             }
+        }
+        for (i, supports) in self.out_var_supports.iter_mut().enumerate() {
+            if !clause.head_contains_var(i) {
+                supports.clear();
+            }
+        }
+        while self.out_var_supports.len() > 0 &&
+              !clause.head_contains_var(self.out_var_supports.len() - 1) {
+            self.out_var_supports.pop();
         }
     }
 
@@ -107,6 +125,9 @@ impl MutationState {
             }
             BodyMutationOp::RemoveLiteral(lit_idx) => {
                 let mut variable_removals = vec![0; clause.num_output_variables()];
+                if clause.body.len() <= 1 {
+                    return false;
+                }
                 if let Some(lit) = clause.body.get(lit_idx) {
                     for term in &lit.terms {
                         if let Term::Variable(varb) = *term {
@@ -144,12 +165,9 @@ impl MutationState {
               T: TruthValue
     {
         if self.can_use_body_mut_op(body_op, clause) {
-            let old_clause = clause.clone();
             self.apply_body_mut_op(body_op, clause, rng, program);
-            if !clause.is_valid() {
-                println!("{:#?} \n {:#?} \n {:#?}", self, old_clause, body_op);
-            }
-            assert!(clause.is_valid());
+            let fresh_self = Self::new(clause, self.max_literals);
+            assert!(clause.is_valid() && *self == fresh_self);
             true
         } else {
             false
@@ -168,8 +186,28 @@ impl MutationState {
             BodyMutationOp::Swap((lit_a, term_a), (lit_b, term_b)) => {
                 let a = clause.body[lit_a].terms[term_a];
                 let b = clause.body[lit_b].terms[term_b];
+                if let Term::Variable(varb) = a {
+                    if clause.head_contains_var(varb) {
+                        self.out_var_supports[varb].remove(&(lit_a, term_a));
+                    }
+                }
+                if let Term::Variable(varb) = b {
+                    if clause.head_contains_var(varb) {
+                        self.out_var_supports[varb].remove(&(lit_b, term_b));
+                    }
+                }
                 clause.body[lit_a].terms[term_a] = b;
                 clause.body[lit_b].terms[term_b] = a;
+                if let Term::Variable(varb) = a {
+                    if clause.head_contains_var(varb) {
+                        self.out_var_supports[varb].insert((lit_b, term_b));
+                    }
+                }
+                if let Term::Variable(varb) = b {
+                    if clause.head_contains_var(varb) {
+                        self.out_var_supports[varb].insert((lit_a, term_a));
+                    }
+                }
             }
             BodyMutationOp::InsertLiteral(pred) => {
                 let mut terms = (0..(1 + clause.num_variables()))
@@ -179,19 +217,23 @@ impl MutationState {
                 if num_terms == 0 {
                     return;
                 }
-                rng.shuffle(&mut terms);
-                terms.truncate(program
-                                   .num_terms(pred)
-                                   .unwrap_or(rng.gen_range(1, 1 + num_terms)));
-                let lit_idx = clause.body.len();
-                for (term_idx, term) in terms.iter().enumerate() {
-                    if let Term::Variable(v) = *term {
-                        if v < self.out_var_supports.len() {
-                            self.out_var_supports[v].insert((lit_idx, term_idx));
+                if let Some(needed_num_terms) = program.num_terms(pred) {
+                    while terms.len() < needed_num_terms {
+                        let to_add = rng.choose(&terms).unwrap().clone();
+                        terms.push(to_add);
+                    }
+                    rng.shuffle(&mut terms);
+                    terms.truncate(needed_num_terms);
+                    let lit_idx = clause.body.len();
+                    for (term_idx, term) in terms.iter().enumerate() {
+                        if let Term::Variable(v) = *term {
+                            if clause.head_contains_var(v) {
+                                self.out_var_supports[v].insert((lit_idx, term_idx));
+                            }
                         }
                     }
+                    clause.body.push(Literal::new_from_vec(pred, terms));
                 }
-                clause.body.push(Literal::new_from_vec(pred, terms));
             }
             BodyMutationOp::BindConstant((lit_idx, term_idx), cst) => {
                 if let Term::Variable(v) = clause.body[lit_idx].terms[term_idx] {
@@ -208,7 +250,7 @@ impl MutationState {
                     }
                 }
                 clause.body[lit_idx].terms[term_idx] = Term::Variable(varb);
-                if varb < self.out_var_supports.len() {
+                if clause.head_contains_var(varb) {
                     self.out_var_supports[varb].insert((lit_idx, term_idx));
                 }
             }

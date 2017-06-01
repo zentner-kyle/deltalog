@@ -1,4 +1,5 @@
 use name_table::NameTable;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
 use util::hash_map_get_or_insert_len;
@@ -54,10 +55,9 @@ impl Clause {
         return count;
     }
 
-    #[allow(dead_code)]
     pub fn head_contains_var(&self, variable: Variable) -> bool {
         for term in &self.head.terms {
-            if &Term::Variable(variable) == term {
+            if Term::Variable(variable) == *term {
                 return true;
             }
         }
@@ -65,6 +65,9 @@ impl Clause {
     }
 
     pub fn is_valid(&self) -> bool {
+        if self.body.len() == 0 {
+            return false;
+        }
         for term in &self.head.terms {
             if let &Term::Variable(var) = term {
                 if !self.contains_variable_in_body(var) {
@@ -75,6 +78,7 @@ impl Clause {
         return true;
     }
 
+    #[allow(dead_code)]
     pub fn max_output_variable(&self) -> usize {
         let mut max = 0;
         for term in &self.head.terms {
@@ -280,14 +284,17 @@ impl Fact {
     pub fn to_display<'a, 'b>(&'a self, pred_names: &'b NameTable) -> FactDisplayer<'a, 'b> {
         FactDisplayer {
             fact: self,
-            name: pred_names.get_name(self.predicate).unwrap(),
+            name: pred_names
+                .get_name(self.predicate)
+                .map(|n| Cow::Borrowed(n))
+                .unwrap_or_else(|| Cow::Owned(format!("Predicate#{}", self.predicate))),
         }
     }
 }
 
 pub struct FactDisplayer<'a, 'b> {
     fact: &'a Fact,
-    name: &'b str,
+    name: Cow<'b, str>,
 }
 
 impl<'a, 'b> fmt::Display for FactDisplayer<'a, 'b> {

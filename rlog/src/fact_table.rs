@@ -127,6 +127,27 @@ impl<'a, T> Iterator for AllFactIter<'a, T>
     }
 }
 
+pub struct PredicateFactIter<'a, T: 'a>
+    where T: TruthValue
+{
+    map_iter: Option<hash_map::Iter<'a, Fact, FactRecord<T>>>,
+}
+
+impl<'a, T> Iterator for PredicateFactIter<'a, T>
+    where T: TruthValue
+{
+    type Item = (&'a Fact, &'a T);
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(ref mut map_iter) = self.map_iter {
+            if let Some((fact, record)) = map_iter.next() {
+                return Some((fact, &record.truth));
+            }
+        }
+        return None;
+    }
+}
+
+
 #[derive(Clone, Debug)]
 pub struct FactTable<T>
     where T: TruthValue
@@ -208,6 +229,10 @@ impl<T> FactTable<T>
             vec_iter: self.maps.iter(),
             map_iter: None,
         }
+    }
+
+    pub fn predicate_facts(&self, predicate: Predicate) -> PredicateFactIter<T> {
+        PredicateFactIter { map_iter: self.maps.get(predicate).map(|m| m.iter()) }
     }
 
     // Returns true if the fact was not previously in the table.

@@ -47,15 +47,40 @@ pub fn gradient_step<T>(program: &Program<T>,
                         max_iters: usize)
     where T: TruthValue
 {
+    let expected_predicates = expected
+        .all_facts_iter()
+        .map(|(fact, _truth)| fact.predicate)
+        .collect::<HashSet<_>>();
+
     // Convert expected truth values into initial adjoints.
     let mut frontier: Vec<_> = expected
         .all_facts_iter()
         .map(|(fact, truth)| {
                  let z = facts.get(fact).cloned().unwrap_or_else(|| T::zero());
+                 // TODO(zentner): Use something more flexible than hardcoding MSE
                  let gz = T::sub(truth, &z);
                  (fact.clone(), z, gz, HashSet::new())
              })
         .collect();
+
+    let mut unexpected_facts = FactTable::new();
+
+    {
+        let unexpected = expected_predicates
+            .into_iter()
+            .flat_map(|predicate| facts.predicate_facts(predicate))
+            .filter_map(|(fact, truth)| if expected.get_unmut(fact).is_none() {
+                            let z = truth;
+                            // TODO(zentner): Use something more flexible than hardcoding MSE
+                            let gz = T::sub(&T::zero(), truth);
+                            unexpected_facts.add_fact(fact.clone(), gz.clone());
+                            Some((fact.clone(), z.clone(), gz.clone(), HashSet::new()))
+                        } else {
+                            None
+                        });
+        frontier.extend(unexpected);
+    }
+
     let mut iterations = 0;
     while let Some((fact, z, gz, entailers)) = frontier.pop() {
         if iterations > max_iters {
@@ -140,7 +165,7 @@ pub fn compute_adjustments<T>(program: &Program<T>,
         result_from_sample.merge_new_generation(input.clone());
         evaluate_bottom_up(&mut result_from_sample, program);
         gradient_step(program,
-                      result_from_sample,
+                      result_from_sample.clone(),
                       expected,
                       &mut clause_adjustments,
                       &mut apparent_fact_adjustments,
@@ -148,9 +173,9 @@ pub fn compute_adjustments<T>(program: &Program<T>,
                       max_iters);
     }
     return Adjustment {
-               clause_adjustments: clause_adjustments,
-               apparent_fact_adjustments: apparent_fact_adjustments,
-               latent_fact_adjustments: latent_fact_adjustments,
+               clause_adjustments,
+               apparent_fact_adjustments,
+               latent_fact_adjustments,
            };
 }
 
@@ -218,6 +243,33 @@ mod tests {
         let (clause_diff, mut fact_diff) = (res.clause_adjustments, res.latent_fact_adjustments);
         assert!(clause_diff[0].0 > 0.0);
         assert!(clause_diff[1].0 > 0.0);
+        assert_eq!(fact_diff.get(&input_fact), None);
+    }
+
+    #[test]
+    fn minimizes_bad_weight_in_single_clause() {
+        let mut prg = Program::new();
+        // b(X) :- a(X)
+        // Where a is predicate 0, b is predicate 1, and X is variable 0.
+        prg.push_clause(Clause::new_from_vec(Literal::new_from_vec(1, vec![Term::Variable(0)]),
+                                              vec![Literal::new_from_vec(0,
+                                                                         vec![Term::Variable(0)])]),
+                         MaxFloat64Dual(1.0),
+                         None)
+            .unwrap();
+        let mut facts = FactTable::<MaxFloat64>::new();
+        // a(2)
+        let input_fact = Fact::new_from_vec(0, vec![2]);
+        facts.add_fact(input_fact.clone(), MaxFloat64(1.0));
+        // We expect b(3) (*not b(2)) to be added to the FactTable.
+        let mut expected = FactTable::<MaxFloat64>::new();
+        expected.add_fact(Fact::new_from_vec(1, vec![3]), MaxFloat64(1.0));
+        let res = compute_adjustments(&prg, &facts, &vec![(facts.clone(), expected)], 100);
+        let (clause_diff, mut fact_diff) = (res.clause_adjustments, res.latent_fact_adjustments);
+        assert!(clause_diff[0].0 < 0.0);
+        assert_eq!(clause_diff[0], MaxFloat64Dual(-1.0));
+        // The following isn't a very important property.
+        // But it would be bad to change it accidentally.
         assert_eq!(fact_diff.get(&input_fact), None);
     }
 }

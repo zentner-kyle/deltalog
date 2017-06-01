@@ -11,6 +11,7 @@ use std::cmp::Ordering;
 use std::cmp::PartialOrd;
 use std::mem::swap;
 use truth_value::TruthValue;
+use uniform_selector::UniformPlusKSelector;
 
 pub struct Refiner<R, T>
     where R: Rng,
@@ -43,7 +44,7 @@ impl<R, T> Refiner<R, T>
                samples: Vec<(FactTable<T>, FactTable<T>)>)
                -> Self {
         let mut default_clause_weight = T::dual_zero();
-        T::dual_adjust(&mut default_clause_weight, &T::dual_default(), 0.5);
+        T::dual_adjust(&mut default_clause_weight, &T::dual_default(), 0.2);
         let gen_rng = rng.gen::<XorShiftRng>();
         Refiner {
             rng: rng,
@@ -52,7 +53,7 @@ impl<R, T> Refiner<R, T>
             program: program,
             samples: samples,
             gradient_iterations: 10,
-            learning_rate: 0.5,
+            learning_rate: 0.1,
             max_new_body_len: 3,
             max_new_predicate_terms: 3,
             step_iterations: 100,
@@ -114,7 +115,48 @@ impl<R, T> Refiner<R, T>
                 }
                 if success {
                     clause.canonicalize_in_place();
-                    self.program.push_clause_simple(clause);
+                    self.program
+                        .push_clause(clause, self.default_clause_weight.clone(), None)
+                        .expect("mutation should have output a valid clause");
+                }
+            }
+        }
+    }
+
+    pub fn mutate(&mut self) {
+        let mut selector = UniformPlusKSelector::new(2, &self.program, &self.base_facts);
+        let gen = MutationOpGenerator::uniform();
+        for _ in 0..self.num_mutated_clauses_to_add {
+            if let Ok(clause_idx) = selector.choose_clause(&mut self.rng, &self.program) {
+                let mut clause = self.program.get_clause_by_idx(clause_idx).clone();
+                let mut state = MutationState::new(&clause, self.max_num_literals);
+                let mut success = false;
+                for _ in 0..10 {
+                    if let Ok(body_op) = gen.generate_body(&mut self.rng,
+                                                           &mut selector,
+                                                           &self.program,
+                                                           0) {
+                        success |= state.checked_apply_body_mut_op(body_op,
+                                                                   &mut clause,
+                                                                   &mut self.rng,
+                                                                   &self.program);
+
+                    }
+                    if let Ok(head_op) = gen.generate_head(&mut self.rng,
+                                                           &mut selector,
+                                                           &self.program,
+                                                           0) {
+                        success |= state.checked_apply_head_mut_op(head_op,
+                                                                   &mut clause,
+                                                                   &mut self.rng,
+                                                                   &self.program);
+                    }
+                }
+                if success {
+                    clause.canonicalize_in_place();
+                    self.program
+                        .push_clause(clause, self.default_clause_weight.clone(), None)
+                        .expect("mutation should have output a valid clause");
                 }
             }
         }
@@ -176,16 +218,12 @@ impl<R, T> Refiner<R, T>
 
     pub fn iterate(&mut self, iterations: usize) {
         for _ in 0..iterations {
-            println!("computing adjustment");
             let adjustments = self.fit_weights();
-            println!("reconstraining");
             self.reconstrain(adjustments);
-            println!("reducing clauses");
+            self.mutate();
             self.reduce_clauses();
-            println!("adding clauses");
             self.add_clauses();
         }
-        println!();
     }
 
     #[cfg(test)]

@@ -131,6 +131,7 @@ impl<T> Program<T>
         *self.predicate_num_terms.get(&predicate).unwrap()
     }
 
+    #[allow(dead_code)]
     pub fn push_clause_simple(&mut self, clause: Clause) {
         self.push_clause(clause, T::dual_default(), None)
             .unwrap();

@@ -66,7 +66,7 @@ pub fn compute_constraint_measure<T>(program: &Program<T>,
         }
     }
 
-    let mut unconstraint_demand = HashMap::new();
+    let mut unconstraint_demand: HashMap<Predicate, Vec<f64>> = HashMap::new();
     for ((predicate, term_index, _), demand) in latent_not_found {
         match unconstraint_demand.entry(predicate) {
             Entry::Occupied(mut pair) => {

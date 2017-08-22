@@ -1,5 +1,5 @@
 [package]
-name = "rlog"
+name = "deltalog"
 version = "0.2.0"
 authors = ["Kyle Zentner <zentner.kyle@gmail.com>"]
 

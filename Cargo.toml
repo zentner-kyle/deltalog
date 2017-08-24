@@ -1,11 +1,11 @@
 [package]
-name = "logician"
+name = "deltalog"
 version = "0.2.0"
 authors = ["Kyle Zentner <zentner.kyle@gmail.com>"]
 
 [dependencies]
+log = "0.3"
+rand = "0.3"
+unicode-xid = "0.0.4"
+quickcheck = "0.4.1"
 clap = "2.20.4"
-
-[dependencies.rlog]
-version = "0.2"
-path = "../rlog"

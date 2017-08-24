@@ -18,21 +18,24 @@ Planned / work in progress features include:
  * Synthesis.
  * Reverse inference.
 
-##Parsing
+### Parsing
+
 The parser is a simple recursive descent parser. Rust's lightweight syntax for
 Result based error handling makes this very easy.
 
-##Evaluation
+### Evaluation
+
 The evaluator uses the bottom up semi-naive algorithm.
 
-##Fuzzy Logic and Clause Weights
+### Fuzzy Logic and Clause Weights
+
 DeltaLog allows specifying a TruthValue type. TruthValue types define how
 union and intersection of sets of facts result in new TruthValues. Currently,
 there are two TruthValue types, the empty tuple type, and a TruthValue type
 that uses the maximum function for union, and the minimum function for
 intersection.
 
-##Reverse Mode Automatic Differentiation
+### Reverse Mode Automatic Differentiation
 DeltaLog can compute the adjoints of the weights associated with clauses, given
 some loss values associated with some facts.
 
@@ -45,16 +48,16 @@ given some input facts for the same set of predicates.
 
 In the future, this will be made more flexible.
 
-##Weight Optimization
+### Weight Optimization
 DeltaLog can use the adjoints computed using Reverse Mode Automatic
 Differentiation to adjust the weights of a program.
 
-##Random Program Generation
+### Random Program Generation
 DeltaLog is capable of generating random programs. However, the current method
 for doing so is extremely ad-hoc. In the future, generation will be based on
 DeltaLog's mutation capabilities, which are more principled.
 
-##Program Mutation
+### Program Mutation
 DeltaLog's mutation algorithm is capable of being guided to prefer specific
 predicates or terms within the literals of a predicate. It can be
 configured to mutate within some sub-space of the space of DeltaLog programs.

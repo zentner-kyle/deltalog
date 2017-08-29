@@ -1,0 +1,332 @@
+# The chess games state is stored in two predicates:
+# player(C: 0 | 1)
+# and
+# board(X: [0-7], Y: [0-7], P: [0-6], C: 0 | 1)
+# where:
+#  P represents a piece.
+#  0 -> blank
+#  1 -> pawn
+#  2 -> rook
+#  3 -> knight
+#  4 -> bishop
+#  5 -> queen
+#  6 -> king
+#  C represents a color / player.
+# The input move is
+# move(StartX, StartY, OutX, OutY)
+# The ouput is
+# next_board(X: [0-7], Y: [0-7], P: [0-6], C: 0 | 1)
+# next_player(C: 0 | 1)
+
+# Generic utilities
+inc(0, 1).
+inc(1, 2).
+inc(2, 3).
+inc(3, 4).
+inc(4, 5).
+inc(5, 6).
+inc(6, 7).
+
+any(X) :- inc(X, Y)
+
+less(X, Y) :- inc(X, Y)
+less(X, Y) :- inc(X, Z), less(Z, Y)
+
+ne(X, Y) :- ne(Y, X)
+ne(X, Y) :- less(X, Y)
+ne2(X1, Y1, X2, Y2) :- ne(X1, X2), inc(Y1, Y3), inc(Y2, Y4)
+ne2(X1, Y1, X2, Y2) :- ne(Y1, Y2), inc(X1, X3), inc(X2, X4)
+
+next_player(0) :- player(1)
+next_player(1) :- player(0)
+
+next_board(X, Y, P, C) :-
+  move_output(X, Y, P, C)
+
+move_output(X, Y, P, C) :-
+  # Must be C's turn
+  player(C),
+  move(StartX, StartY, X, Y),
+  # C must be moving their piece, from StartX, StartY
+  board(StartX, StartY, P, C),
+  # Need to move to blank or opponent's piece
+  valid_end(X, Y, C),
+  # Piece needs to move this way
+  valid_move_for_piece_player(StartX, StartY, X, Y, P, C)
+
+# Put a blank where the piece was moved from.
+next_board(X1, Y1, 0, 0) :-
+  move_output(X2, Y2, P, C),
+  move(X1, Y1, X3, Y3)
+
+# Copy all pieces that weren't moved or at the end of a move.
+next_board(X1, Y1, P1, C1) :-
+  # Get the piece.
+  board(X1, Y1, P1, C1),
+  # A move must have been made.
+  move_output(X2, Y2, P2, C2),
+  # The move must not have been made to the same space.
+  ne2(X1, Y1, X2, Y2),
+  # Must not have moved from X1, Y1.
+  move(X3, Y3, X4, Y4),
+  ne2(X1, Y1, X3, Y3)
+
+# Players can move to blank spaces.
+valid_end(X, Y, C) :-
+  player(C),
+  board(X, Y, 0, C2)
+
+# Players can move to their opponent's spaces.
+valid_end(X, Y, C) :-
+  ne(C, C2),
+  board(X, Y, Q, C2)
+
+# Forward is increasing for player 0, decreasing for player 1
+step(Start, End, 0) :- inc(Start, End)
+step(Start, End, 1) :- inc(End, Start)
+
+# As long as there's a blank, pawns can move one step forward.
+valid_move_for_piece_player(X, StartY, X, Y, 1, C) :-
+  # There's C's pawn
+  board(X, StartY, 1, C),
+  # It steps from StepY to Y
+  step(StartY, Y, C),
+  # And there's a blank space at Y
+  board(X, Y, 0, Q)
+
+# Player 0's pawns can move from Y=1 to Y=3 if there's two blank spaces in front of them.
+valid_move_for_piece_player(X, 1, X, 3, 1, 0) :-
+  # 0's pawn is at X, 1
+  board(X, 1, 1, 0),
+  # X, 2 is blank
+  board(X, 2, 0, Q1),
+  # X, 3 is blank
+  board(X, 3, 0, Q2)
+
+# Player 1's pawns can move from Y=6 to Y=4 if there's two blank spaces in front of them.
+valid_move_for_piece_player(X, 6, X, 4, 1, 1) :-
+  # 1's pawn is at X, 6
+  board(X, 6, 1, 1),
+  # X, 5 is blank
+  board(X, 5, 0, Q1),
+  # X, 4 is blank
+  board(X, 4, 0, Q2)
+
+adjacent(X, Y) :- inc(X, Y)
+adjacent(X, Y) :- inc(Y, X)
+
+# Pawns capture by stepping forward diagonally onto an opponent's piece
+valid_move_for_piece_player(StartX, StartY, X, Y, 1, C) :-
+  # It steps from StepY to Y
+  step(StartY, Y, C),
+  # It changes by X one step (either direction)
+  adjacent(StartX, X),
+  # The opponent has a piece at X, Y
+  next_player(C2),
+  board(X, Y, P, C2),
+  # And that "piece" is not a blank space.
+  ne(P, 0)
+
+valid_move_for_piece_player(StartX, StartY, X, Y, P, C) :-
+  # Don't care about player, but need it to come from somewhere (first order restriction).
+  player(C),
+  valid_move_for_piece(StartX, StartY, X, Y, P)
+
+triple(Start, Mid, End) :-
+  inc(Start, Mid),
+  inc(Mid, End)
+
+momentum(Start, Mid, End) :- triple(Start, Mid, End)
+momentum(Start, Mid, End) :- triple(End, Mid, Start)
+momentum(X, X, X) :- any(X)
+
+cardinal_step(StartX, Y, X, Y) :-
+  adjacent(StartX, X), any(Y)
+
+cardinal_step(X, StartY, X, Y) :-
+  adjacent(StartY, Y), any(X)
+
+momentum_2d(StartX, StartY, MidX, MidY, X, Y) :-
+  momentum(StartX, MidX, X),
+  momentum(StartY, MidY, Y)
+
+pass_through_space(StartX, StartY, MidX, MidY, X, Y) :-
+  momentum_2d(StartX, StartY, MidX, MidY, X, Y),
+  board(MidX, MidY, 0, C)
+
+# Can move to any cardinal adjacent space.
+rook_motion(StartX, StartY, StartX, StartY, X, Y) :-
+  cardinal_step(StartX, StartY, X, Y)
+
+# Can continue a cardinal motion after passing through a blank space.
+rook_motion(OriginalX, OriginalY, StartX, StartY, X, Y) :-
+  rook_motion(OriginalX, OriginalY, PrevX, PrevY, StartX, StartY),
+  pass_through_space(PrevX, PrevY, StartX, StartY, X, Y)
+
+# Rooks move in a rook motion.
+valid_move_for_piece(StartX, StartY, X, Y, 2) :-
+  rook_motion(StartX, StartY, PrevX, PrevY, X, Y)
+
+# This shape:
+# *-*-*-*
+# | | | |
+# *-*-*-*
+# | | |#|
+# *-*-*-*
+# |k|-|/|
+# *-*-*-*
+knight_shape(StartX, StartY, X, Y) :-
+  # "Right" 2
+  triple(StartX, MidX, X),
+  # "Forward" 1
+  inc(StartY, Y)
+
+# This shape (mirror across X = Y):
+# *-*-*-*
+# |/|#| |
+# *-*-*-*
+# ||| | |
+# *-*-*-*
+# |k| | |
+# *-*-*-*
+knight_shape(StartX, StartY, X, Y) :- knight_shape(StartY, StartX, Y, X)
+
+# This shape (invert X axis):
+# *-*-*-*
+# | | | |
+# *-*-*-*
+# |#| | |
+# *-*-*-*
+# |\|-|k|
+# *-*-*-*
+knight_shape(StartX, StartY, X, Y) :- knight_shape(X, StartY, StartX, Y)
+
+# This shape (invert Y axis):
+# *-*-*-*
+# |k|-|\|
+# *-*-*-*
+# | | |#|
+# *-*-*-*
+# | | | |
+# *-*-*-*
+knight_shape(StartX, StartY, X, Y) :- knight_shape(StartX, Y, X, StartY)
+
+# All other knight shapes result from composition of the above.
+
+# Knight can always move in a knight shape.
+valid_move_for_piece(StartX, StartY, X, Y, 3) :-
+  # Move in a knight shape
+  knight_shape(StartX, StartY, X, Y)
+
+
+diagonal_step(StartX, StartY, X, Y) :-
+  adjacent(StartX, X),
+  adjacent(StartY, Y)
+
+# Can move to any diagonal adjacent space.
+bishop_motion(StartX, StartY, StartX, StartY, X, Y) :-
+  diagonal_step(StartX, StartY, X, Y)
+
+# Can continue a diagonal motion after passing through a blank space.
+bishop_motion(OriginalX, OriginalY, StartX, StartY, X, Y) :-
+  bishop_motion(OriginalX, OriginalY, PrevX, PrevY, StartX, StartY),
+  pass_through_space(PrevX, PrevY, StartX, StartY, X, Y)
+
+# Bishops move in a bishop motion.
+valid_move_for_piece(StartX, StartY, X, Y, 4) :-
+  bishop_motion(StartX, StartY, PrevX, PrevY, X, Y)
+
+# Queens can move in a bishop motion.
+valid_move_for_piece(StartX, StartY, X, Y, 5) :-
+  bishop_motion(StartX, StartY, PrevX, PrevY, X, Y)
+
+# Queens can move in a rook motion.
+valid_move_for_piece(StartX, StartY, X, Y, 5) :-
+  rook_motion(StartX, StartY, PrevX, PrevY, X, Y)
+
+# Kings can move to any cardinal adjacent space.
+valid_move_for_piece(StartX, StartY, X, Y, 6) :-
+  cardinal_step(StartX, StartY, X, Y)
+
+# Kings can move to any diagonal adjacent space.
+valid_move_for_piece(StartX, StartY, X, Y, 6) :-
+  diagonal_step(StartX, StartY, X, Y)
+
+
+# Empty board, for reference:
+board(0, 0, 0, 0).
+board(0, 1, 0, 0).
+board(0, 2, 0, 0).
+board(0, 3, 0, 0).
+board(0, 4, 0, 0).
+board(0, 5, 0, 0).
+board(0, 6, 0, 0).
+board(0, 7, 0, 0).
+
+board(1, 0, 0, 0).
+board(1, 1, 0, 0).
+board(1, 2, 0, 0).
+board(1, 3, 0, 0).
+board(1, 4, 0, 0).
+board(1, 5, 0, 0).
+board(1, 6, 0, 0).
+board(1, 7, 0, 0).
+
+board(2, 0, 0, 0).
+board(2, 1, 0, 0).
+board(2, 2, 0, 0).
+board(2, 3, 0, 0).
+board(2, 4, 0, 0).
+board(2, 5, 0, 0).
+board(2, 6, 0, 0).
+board(2, 7, 0, 0).
+
+board(3, 0, 0, 0).
+board(3, 1, 0, 0).
+board(3, 2, 0, 0).
+board(3, 3, 0, 0).
+board(3, 4, 0, 0).
+board(3, 5, 0, 0).
+board(3, 6, 0, 0).
+board(3, 7, 0, 0).
+
+board(4, 0, 0, 0).
+board(4, 1, 0, 0).
+board(4, 2, 0, 0).
+board(4, 3, 0, 0).
+board(4, 4, 0, 0).
+board(4, 5, 0, 0).
+board(4, 6, 0, 0).
+board(4, 7, 0, 0).
+
+board(5, 0, 0, 0).
+board(5, 1, 0, 0).
+board(5, 2, 0, 0).
+board(5, 3, 0, 0).
+board(5, 4, 0, 0).
+board(5, 5, 0, 0).
+board(5, 6, 0, 0).
+board(5, 7, 0, 0).
+
+board(6, 0, 0, 0).
+board(6, 1, 0, 0).
+board(6, 2, 0, 0).
+board(6, 3, 0, 0).
+board(6, 4, 0, 0).
+board(6, 5, 0, 0).
+board(6, 6, 0, 0).
+board(6, 7, 0, 0).
+
+board(7, 0, 0, 0).
+board(7, 1, 0, 0).
+board(7, 2, 0, 0).
+board(7, 3, 0, 0).
+board(7, 4, 0, 0).
+board(7, 5, 0, 0).
+board(7, 6, 0, 0).
+board(7, 7, 0, 0).
+
+# Example move:
+# player(1).
+# board(0, 6, 3, 1).
+# move(0, 6, 1, 4).

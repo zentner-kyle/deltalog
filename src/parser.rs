@@ -415,6 +415,8 @@ pub fn program<T>(source: &str)
                 .map_err(|s| err_from_str(s, rest))?;
             facts.add_fact(fact, current_confidence.clone());
             rest = r;
+        } else {
+            return err_msg("Unterminated clause", start_of_clause);
         }
     }
 }

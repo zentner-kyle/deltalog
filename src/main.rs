@@ -2,7 +2,6 @@ extern crate deltalog;
 extern crate clap;
 
 use clap::{App, Arg};
-use std::fmt::Write;
 use std::fs;
 
 fn main() {
@@ -21,7 +20,8 @@ fn main() {
     let mut file = fs::File::open(input).expect("Could not open file");
     file.read_to_string(&mut source)
         .expect("Error reading input");
-    let ctxt = deltalog::Context::<deltalog::truth_value::MaxFloat64>::new_from_source(&source)
+    let mut ctxt = deltalog::Context::<deltalog::truth_value::MaxFloat64>::new_from_source(&source)
         .expect("Error creating context");
-    writeln!(ctxt.program_as_string()).expect("Could not output result");
+    println!("{}", ctxt.program_as_string());
+    println!("{}", ctxt.facts_as_string());
 }

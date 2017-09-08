@@ -5,6 +5,7 @@ extern crate log;
 extern crate quickcheck;
 extern crate rand;
 extern crate unicode_xid;
+extern crate cryptominisat;
 
 mod bindings;
 mod bottom_up;
@@ -22,6 +23,7 @@ mod types;
 mod util;
 mod selector;
 mod uniform_selector;
+mod synthesis;
 pub mod truth_value;
 
 use fact_table::FactTable;

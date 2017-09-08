@@ -159,19 +159,6 @@ impl Clause {
         return max;
     }
 
-    pub fn max_predicate(&self) -> Predicate {
-        let mut max = 0;
-        if self.head.predicate > max {
-            max = self.head.predicate;
-        }
-        for lit in &self.body {
-            if lit.predicate > max {
-                max = lit.predicate;
-            }
-        }
-        return max;
-    }
-
     pub fn canonicalize_in_place(&mut self) {
         let mut var_map = HashMap::new();
         for term in &mut self.head.terms {

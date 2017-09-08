@@ -4,8 +4,9 @@ version = "0.2.0"
 authors = ["Kyle Zentner <zentner.kyle@gmail.com>"]
 
 [dependencies]
+clap = "2.20.4"
+cryptominisat = "5.0.1"
 log = "0.3"
+quickcheck = "0.4.1"
 rand = "0.3"
 unicode-xid = "0.0.4"
-quickcheck = "0.4.1"
-clap = "2.20.4"

@@ -421,6 +421,12 @@ pub fn program<T>(source: &str)
     }
 }
 
+#[allow(dead_code)]
+pub fn program_lit(source: &str) -> Program<()> {
+    let ((_, prg, _), _) = program::<()>(source).unwrap();
+    return prg;
+}
+
 #[cfg(test)]
 mod tests {
     use super::{character_is, literal, lowercase_identifier, prefix, program, terms,

@@ -54,14 +54,7 @@ impl<T> Program<T>
 
 
     pub fn num_predicates(&self) -> usize {
-        let mut count = 0;
-        for clause in self.clauses.iter() {
-            let max = clause.max_predicate();
-            if max + 1 > count {
-                count = max + 1;
-            }
-        }
-        return count;
+        self.predicate_num_terms.len()
     }
 
     #[allow(dead_code)]

@@ -427,6 +427,12 @@ pub fn program_lit(source: &str) -> Program<()> {
     return prg;
 }
 
+#[allow(dead_code)]
+pub fn facts_and_program(source: &str) -> (FactTable<()>, Program<()>) {
+    let ((facts, prg, _), _) = program::<()>(source).unwrap();
+    return (facts, prg);
+}
+
 #[cfg(test)]
 mod tests {
     use super::{character_is, literal, lowercase_identifier, prefix, program, terms,

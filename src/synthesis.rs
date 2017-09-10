@@ -19,11 +19,12 @@
 //!     constraints prevent that cause from operating.
 //!     Require that at least one of the causes is responsible for the constant vector.
 
+use fact_table::{FactTable, PredicateFactIter};
 use program::Program;
 use std::iter::repeat;
 use std::sync::Arc;
 use truth_value::TruthValue;
-use types::Predicate;
+use types::{Fact, Predicate};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Source {
@@ -106,10 +107,88 @@ impl<'a, T> SourceVecIter<'a, T>
     }
 }
 
+struct ConstantVecIter<'p, 'f, T>
+    where T: 'p + 'f + TruthValue
+{
+    source_iter: SourceVecIter<'p, T>,
+    fact_table: &'f FactTable<T>,
+    state: Option<(Arc<Vec<Source>>, Arc<Vec<&'f Fact>>)>,
+    fact_iters: Vec<PredicateFactIter<'f, T>>,
+}
+
+impl<'p, 'f, T> ConstantVecIter<'p, 'f, T>
+    where T: 'p + 'f + TruthValue
+{
+    pub fn new(minimum_num_sources: usize,
+               maximum_num_sources: usize,
+               program: &'p Program<T>,
+               fact_table: &'f FactTable<T>)
+               -> Self {
+        ConstantVecIter {
+            source_iter: SourceVecIter::new(minimum_num_sources, maximum_num_sources, program),
+            fact_table,
+            fact_iters: Vec::new(),
+            state: None,
+        }
+    }
+
+    fn set_source_vec(&mut self, sources: Arc<Vec<Source>>) -> Option<Arc<Vec<&'f Fact>>> {
+        let mut fact_vec = Vec::new();
+        self.fact_iters = Vec::new();
+        for source in sources.iter() {
+            let mut fact_iter = self.fact_table.predicate_facts(source.predicate);
+            if let Some((fact, _truth)) = fact_iter.next() {
+                fact_vec.push(fact);
+                self.fact_iters.push(fact_iter);
+            } else {
+                return None;
+            }
+        }
+        let facts = Arc::new(fact_vec);
+        self.state = Some((sources, facts.clone()));
+        return Some(facts);
+    }
+}
+
+impl<'p, 'f, T> Iterator for ConstantVecIter<'p, 'f, T>
+    where T: 'p + 'f + TruthValue
+{
+    type Item = (Arc<Vec<Source>>, Arc<Vec<&'f Fact>>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some((ref sources, ref mut arc_facts)) = self.state {
+            let mut facts_updated = false;
+            {
+                let facts = Arc::make_mut(arc_facts);
+
+                for i in (0..self.fact_iters.len()).rev() {
+                    if let Some((fact, _truth)) = self.fact_iters[i].next() {
+                        facts[i] = fact;
+                        facts_updated = true;
+                        break;
+                    } else if i > 0 {
+                        self.fact_iters[i] = self.fact_table.predicate_facts(sources[i].predicate);
+                    }
+                }
+            }
+            if facts_updated {
+                return Some((sources.clone(), arc_facts.clone()));
+            }
+        }
+        while let Some(sources) = self.source_iter.next() {
+            if let Some(facts) = self.set_source_vec(sources.clone()) {
+                return Some((sources, facts));
+            }
+        }
+        return None;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use parser::program_lit;
+    use parser::{facts_and_program, program_lit};
+    use std::collections::HashSet;
 
     fn check_source_tuples(mut iter: SourceVecIter<()>,
                            source_tuples: &[Vec<(Predicate, usize)>]) {
@@ -245,5 +324,38 @@ mod tests {
                              vec![(2, 0), (1, 1)],
                              vec![(2, 0), (2, 0)]];
         check_source_tuples(SourceVecIter::new(1, 2, &prg), &source_tuples);
+    }
+
+    #[test]
+    fn constant_vec_iter_simple() {
+        let (facts, prg) = facts_and_program(r"
+            a(0).
+            a(1).
+            b(0, 0).
+            b(0, 1).
+        ");
+        let mut iter = ConstantVecIter::new(1, 1, &prg, &facts);
+        // Unfortunately, the order of facts is non-deterministic, since FactTable iteration is
+        // dependent on HashMap ordering.
+        let expected_fact_vec_tuples = vec![(0, 0, vec![vec![0], vec![1]]),
+                                            (0, 0, vec![vec![0], vec![1]]),
+                                            (1, 0, vec![vec![0, 0], vec![0, 1]]),
+                                            (1, 0, vec![vec![0, 0], vec![0, 1]]),
+                                            (1, 1, vec![vec![0, 0], vec![0, 1]]),
+                                            (1, 1, vec![vec![0, 0], vec![0, 1]])];
+        for ((predicate, term_idx, term_choices), (sources, facts)) in
+            expected_fact_vec_tuples.into_iter().zip(&mut iter) {
+            assert_eq!(vec![Source {
+                                predicate,
+                                term_idx,
+                            }],
+                       *sources);
+            let fact_choices: HashSet<Fact> = term_choices
+                .into_iter()
+                .map(|terms| Fact { predicate, terms })
+                .collect();
+            assert!(fact_choices.contains(&facts[0]));
+        }
+        assert_eq!(iter.next(), None);
     }
 }

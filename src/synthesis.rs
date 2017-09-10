@@ -19,12 +19,15 @@
 //!     constraints prevent that cause from operating.
 //!     Require that at least one of the causes is responsible for the constant vector.
 
+use cryptominisat::{Lbool, Lit, Solver};
 use fact_table::{FactTable, PredicateFactIter};
 use program::Program;
+use std::collections::HashSet;
+use std::collections::hash_map::{Entry, HashMap};
 use std::iter::repeat;
 use std::sync::Arc;
 use truth_value::TruthValue;
-use types::{Fact, Predicate};
+use types::{Constant, Fact, Predicate};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Source {
@@ -111,9 +114,8 @@ struct ConstantVecIter<'p, 'f, T>
     where T: 'p + 'f + TruthValue
 {
     source_iter: SourceVecIter<'p, T>,
+    state: Option<(Arc<Vec<Source>>, FactsFromSources<'f, T>)>,
     fact_table: &'f FactTable<T>,
-    state: Option<(Arc<Vec<Source>>, Arc<Vec<&'f Fact>>)>,
-    fact_iters: Vec<PredicateFactIter<'f, T>>,
 }
 
 impl<'p, 'f, T> ConstantVecIter<'p, 'f, T>
@@ -126,27 +128,9 @@ impl<'p, 'f, T> ConstantVecIter<'p, 'f, T>
                -> Self {
         ConstantVecIter {
             source_iter: SourceVecIter::new(minimum_num_sources, maximum_num_sources, program),
-            fact_table,
-            fact_iters: Vec::new(),
             state: None,
+            fact_table,
         }
-    }
-
-    fn set_source_vec(&mut self, sources: Arc<Vec<Source>>) -> Option<Arc<Vec<&'f Fact>>> {
-        let mut fact_vec = Vec::new();
-        self.fact_iters = Vec::new();
-        for source in sources.iter() {
-            let mut fact_iter = self.fact_table.predicate_facts(source.predicate);
-            if let Some((fact, _truth)) = fact_iter.next() {
-                fact_vec.push(fact);
-                self.fact_iters.push(fact_iter);
-            } else {
-                return None;
-            }
-        }
-        let facts = Arc::new(fact_vec);
-        self.state = Some((sources, facts.clone()));
-        return Some(facts);
     }
 }
 
@@ -156,39 +140,244 @@ impl<'p, 'f, T> Iterator for ConstantVecIter<'p, 'f, T>
     type Item = (Arc<Vec<Source>>, Arc<Vec<&'f Fact>>);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some((ref sources, ref mut arc_facts)) = self.state {
-            let mut facts_updated = false;
-            {
-                let facts = Arc::make_mut(arc_facts);
-
-                for i in (0..self.fact_iters.len()).rev() {
-                    if let Some((fact, _truth)) = self.fact_iters[i].next() {
-                        facts[i] = fact;
-                        facts_updated = true;
-                        break;
-                    } else if i > 0 {
-                        self.fact_iters[i] = self.fact_table.predicate_facts(sources[i].predicate);
-                    }
-                }
-            }
-            if facts_updated {
-                return Some((sources.clone(), arc_facts.clone()));
+        if let Some((ref sources, ref mut constants_iter)) = self.state {
+            if let Some(facts) = constants_iter.next() {
+                return Some((sources.clone(), facts));
             }
         }
         while let Some(sources) = self.source_iter.next() {
-            if let Some(facts) = self.set_source_vec(sources.clone()) {
-                return Some((sources, facts));
+            if let Some(facts_iter) = FactsFromSources::from_sources(sources.clone(),
+                                                                     self.fact_table) {
+                self.state = Some((sources, facts_iter));
+                return self.next();
             }
         }
         return None;
     }
 }
 
+struct FactsFromSources<'f, T>
+    where T: 'f + TruthValue
+{
+    sources: Arc<Vec<Source>>,
+    fact_table: &'f FactTable<T>,
+    fact_iters: Vec<PredicateFactIter<'f, T>>,
+    facts: Arc<Vec<&'f Fact>>,
+    skip_update: bool,
+}
+
+impl<'f, T> FactsFromSources<'f, T>
+    where T: 'f + TruthValue
+{
+    fn from_sources(sources: Arc<Vec<Source>>, fact_table: &'f FactTable<T>) -> Option<Self> {
+        let mut facts = Vec::new();
+        let mut fact_iters = Vec::new();
+        for source in sources.iter() {
+            let mut fact_iter = fact_table.predicate_facts(source.predicate);
+            if let Some((fact, _truth)) = fact_iter.next() {
+                facts.push(fact);
+                fact_iters.push(fact_iter);
+            } else {
+                return None;
+            }
+        }
+        Some(FactsFromSources {
+                 sources,
+                 fact_table,
+                 fact_iters,
+                 facts: Arc::new(facts),
+                 skip_update: true,
+             })
+    }
+}
+
+impl<'f, T> Iterator for FactsFromSources<'f, T>
+    where T: 'f + TruthValue
+{
+    type Item = Arc<Vec<&'f Fact>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut should_return_facts = false;
+        if !self.skip_update {
+            let facts = Arc::make_mut(&mut self.facts);
+
+            for i in (0..self.fact_iters.len()).rev() {
+                if let Some((fact, _truth)) = self.fact_iters[i].next() {
+                    facts[i] = fact;
+                    should_return_facts = true;
+                    break;
+                } else if i > 0 {
+                    self.fact_iters[i] = self.fact_table
+                        .predicate_facts(self.sources[i].predicate);
+                }
+            }
+        } else {
+            self.skip_update = false;
+            should_return_facts = true;
+        }
+        if should_return_facts {
+            return Some(self.facts.clone());
+        } else {
+            return None;
+        }
+    }
+}
+
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct SourceTerm {
+    source_idx: usize,
+    term_idx: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct EqualityConstraint(SourceTerm, SourceTerm);
+
+fn constant_vec_from_sources_facts(sources: &[Source], facts: &[&Fact]) -> Vec<Constant> {
+    let mut result = Vec::new();
+    for (source, fact) in sources.iter().zip(facts) {
+        result.push(fact.terms[source.term_idx]);
+    }
+    return result;
+}
+
+fn violated_constraint_literals(solver: &mut Solver,
+                                equality_constraints: &mut HashMap<EqualityConstraint, Lit>,
+                                facts: &[&Fact])
+                                -> Vec<Lit> {
+
+    let mut result = Vec::new();
+    for (source_idx_a, fact_a) in facts.iter().enumerate() {
+        for (term_idx_a, a) in fact_a.terms.iter().enumerate() {
+            for (source_idx_b, fact_b) in facts.iter().enumerate().skip(source_idx_a) {
+                for (term_idx_b, b) in fact_b.terms.iter().enumerate() {
+                    if a != b {
+                        let source_term_a = SourceTerm {
+                            source_idx: source_idx_a,
+                            term_idx: term_idx_a,
+                        };
+                        let source_term_b = SourceTerm {
+                            source_idx: source_idx_b,
+                            term_idx: term_idx_b,
+                        };
+                        let constraint = EqualityConstraint(source_term_a, source_term_b);
+                        let lit = match equality_constraints.entry(constraint) {
+                            Entry::Occupied(pair) => pair.get().clone(),
+                            Entry::Vacant(pair) => pair.insert(solver.new_var()).clone(),
+                        };
+                        result.push(lit);
+                    }
+                }
+            }
+        }
+    }
+    return result;
+}
+
+#[cfg(test)]
+fn print_clause(name: &str, literals: &[Lit]) {
+    print!("clause({}):", name);
+    for lit in literals {
+        if lit.isneg() {
+            print!(" -");
+        } else {
+            print!(" ");
+        }
+        print!("{}", lit.var());
+    }
+    println!();
+}
+
+#[cfg(not(test))]
+fn print_clause(_name: &str, _literals: &[Lit]) {}
+
+fn source_constant_vector<T>(required: Vec<Constant>,
+                             forbidden: HashSet<Vec<Constant>>,
+                             program: &Program<T>,
+                             facts: &FactTable<T>,
+                             max_sources: usize)
+                             -> Option<(Vec<Source>, Vec<EqualityConstraint>)>
+    where T: TruthValue
+{
+    let mut sourceses: Vec<(Arc<Vec<Source>>, Lit)> = Vec::new();
+    let mut equality_constraints: HashMap<EqualityConstraint, Lit> = HashMap::new();
+    let mut solver = Solver::new();
+    solver.set_num_threads(4);
+
+    for sources in SourceVecIter::new(required.len(), max_sources, program) {
+        if let Some(facts_iter) = FactsFromSources::from_sources(sources.clone(), facts) {
+            let use_sources = solver.new_var();
+            let mut unavoidable_forbidden = false;
+            let mut has_required = false;
+            for facts in facts_iter {
+                let violated_constraints =
+                    violated_constraint_literals(&mut solver, &mut equality_constraints, &facts);
+                let constant_vec = constant_vec_from_sources_facts(&sources, &facts);
+                let constant_vec_prefix = &constant_vec[0..required.len()];
+                if required == constant_vec_prefix {
+                    has_required = true;
+                    // if use_sources, no violated EqualityConstraint
+                    for constraint_lit in violated_constraints.iter() {
+                        // Either:
+                        // - Don't use the source
+                        // - Don't violate the constraint
+                        solver.add_clause(&[!use_sources, constraint_lit.clone()]);
+                        print_clause("required", &[!use_sources, constraint_lit.clone()]);
+                    }
+                }
+                if forbidden.contains(constant_vec_prefix) {
+                    let mut clause = violated_constraints;
+                    if clause.len() == 0 {
+                        unavoidable_forbidden = true;
+                        break;
+                    } else {
+                        clause.push(!use_sources);
+                        // Either:
+                        // - Don't use the source
+                        // - Violate one of the constraints
+                        solver.add_clause(&clause);
+                        print_clause("forbidden", &clause);
+                    }
+                }
+            }
+            if has_required && !unavoidable_forbidden {
+                sourceses.push((sources.clone(), use_sources));
+            }
+        }
+    }
+
+    if sourceses.len() == 0 {
+        return None;
+    }
+
+    let use_at_least_one_set_of_sources = sourceses
+        .iter()
+        .map(|&(_, lit)| lit)
+        .collect::<Vec<_>>();
+    solver.add_clause(&use_at_least_one_set_of_sources);
+
+    print_clause("use_at_least_one_set_of_sources",
+                 &use_at_least_one_set_of_sources);
+
+    if solver.solve() != Lbool::True {
+        return None;
+    }
+    for (sources, v) in sourceses.into_iter() {
+        if solver.is_true(v) {
+            let constraints = equality_constraints
+                .iter()
+                .filter_map(|(&c, &v)| if solver.is_true(v) { Some(c) } else { None })
+                .collect();
+            return Some((sources.as_ref().clone(), constraints));
+        }
+    }
+    return None;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use parser::{facts_and_program, program_lit};
-    use std::collections::HashSet;
 
     fn check_source_tuples(mut iter: SourceVecIter<()>,
                            source_tuples: &[Vec<(Predicate, usize)>]) {
@@ -357,5 +546,75 @@ mod tests {
             assert!(fact_choices.contains(&facts[0]));
         }
         assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn explain_copy() {
+        let (facts, prg) = facts_and_program(r"
+            a(0).
+        ");
+        let required = vec![0];
+        let forbidden = HashSet::new();
+        let (sources, constraints) = source_constant_vector(required, forbidden, &prg, &facts, 1)
+            .unwrap();
+        assert_eq!(sources,
+                   &[Source {
+                         predicate: 0,
+                         term_idx: 0,
+                     }]);
+        assert_eq!(constraints, &[]);
+    }
+
+    #[test]
+    fn choose_correct_predicate() {
+        let (facts, prg) = facts_and_program(r"
+            a(0).
+            b(1).
+            c(2).
+            d(3).
+        ");
+        let required = vec![2];
+        let forbidden = HashSet::new();
+        let (sources, constraints) = source_constant_vector(required, forbidden, &prg, &facts, 1)
+            .unwrap();
+        assert_eq!(sources,
+                   &[Source {
+                         predicate: 2,
+                         term_idx: 0,
+                     }]);
+        assert_eq!(constraints, &[]);
+    }
+
+    #[test]
+    fn require_equality_constraint() {
+        let (facts, prg) = facts_and_program(r"
+            a(0).
+            b(0).
+            a(1).
+            b(2).
+        ");
+        let required = vec![0];
+        let forbidden = [vec![1], vec![2]].iter().cloned().collect();
+        let (sources, constraints) = source_constant_vector(required, forbidden, &prg, &facts, 2)
+            .unwrap();
+        assert_eq!(sources,
+                   &[Source {
+                         predicate: 0,
+                         term_idx: 0,
+                     },
+                     Source {
+                         predicate: 1,
+                         term_idx: 0,
+                     }]);
+        assert_eq!(constraints,
+                   &[EqualityConstraint(SourceTerm {
+                                            source_idx: 0,
+                                            term_idx: 0,
+                                        },
+                                        SourceTerm {
+                                            source_idx: 1,
+                                            term_idx: 0,
+                                        })]);
+
     }
 }

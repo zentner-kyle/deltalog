@@ -27,7 +27,7 @@ use std::collections::hash_map::{Entry, HashMap};
 use std::iter::repeat;
 use std::sync::Arc;
 use truth_value::TruthValue;
-use types::{Constant, Fact, Predicate};
+use types::{Clause, Constant, Fact, Literal, Predicate, Term};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Source {
@@ -374,6 +374,45 @@ fn source_constant_vector<T>(required: Vec<Constant>,
     return None;
 }
 
+fn create_clause<T>(program: &Program<T>,
+                    output_predicate: Predicate,
+                    output_num_terms: usize,
+                    sources: &[Source],
+                    equality_constraints: &[EqualityConstraint])
+                    -> Clause
+    where T: TruthValue
+{
+    let num_output_vars = output_num_terms;
+    let head = Literal::new_from_vec(output_predicate,
+                                     (0..num_output_vars).map(|t| Term::Variable(t)).collect());
+    let mut back_refs = HashMap::new();
+    for EqualityConstraint(first, second) in equality_constraints.iter().cloned() {
+        back_refs.insert(second, first);
+    }
+
+    let mut num_variables_so_far = sources.len();
+    let mut body: Vec<Literal> = Vec::new();
+    for (source_idx, source) in sources.iter().cloned().enumerate() {
+        let mut terms = Vec::with_capacity(program.get_num_terms(source.predicate));
+        for term_idx in 0..program.get_num_terms(source.predicate) {
+            if term_idx == source.term_idx {
+                terms.push(Term::Variable(term_idx));
+            } else if let Some(back_ref) = back_refs.get(&SourceTerm {
+                                                              source_idx,
+                                                              term_idx,
+                                                          }) {
+                terms.push(body[back_ref.source_idx].terms[back_ref.term_idx]);
+            } else {
+                terms.push(Term::Variable(term_idx + num_variables_so_far));
+                num_variables_so_far += 1;
+            }
+        }
+        body.push(Literal::new_from_vec(source.predicate, terms));
+    }
+    Clause::new_from_vec(head, body)
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -616,5 +655,33 @@ mod tests {
                                             term_idx: 0,
                                         })]);
 
+    }
+
+    #[test]
+    fn synth_clause_with_equality_constraint() {
+        let (facts, mut prg) = facts_and_program(r"
+            a(0).
+            b(0).
+            a(1).
+            b(2).
+        ");
+        let required = vec![0];
+        let forbidden = [vec![1], vec![2]].iter().cloned().collect();
+        let (sources, constraints) = source_constant_vector(required, forbidden, &prg, &facts, 2)
+            .unwrap();
+        let result_clause = create_clause(&prg, 2, 1, &sources, &constraints);
+        println!("clause = {:?}", result_clause);
+        prg.push_clause_simple(result_clause.clone());
+        println!("{}", prg);
+        // The order of the predicates is determined by the SAT solver randomized starting
+        // conditions.
+        let expected_clauses =
+            [Clause::new_from_vec(Literal::new_from_vec(2, vec![Term::Variable(0)]),
+                                  vec![Literal::new_from_vec(0, vec![Term::Variable(0)]),
+                                       Literal::new_from_vec(1, vec![Term::Variable(0)])]),
+             Clause::new_from_vec(Literal::new_from_vec(2, vec![Term::Variable(0)]),
+                                  vec![Literal::new_from_vec(1, vec![Term::Variable(0)]),
+                                       Literal::new_from_vec(0, vec![Term::Variable(0)])])];
+        assert!(expected_clauses.contains(&result_clause));
     }
 }

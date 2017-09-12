@@ -26,6 +26,7 @@ use std::collections::HashSet;
 use std::collections::hash_map::{Entry, HashMap};
 use std::iter::repeat;
 use std::sync::Arc;
+use std::time::Instant;
 use truth_value::TruthValue;
 use types::{Clause, Constant, Fact, Literal, Predicate, Term};
 
@@ -304,6 +305,7 @@ fn source_constant_vector<T>(required: Vec<Constant>,
     let mut solver = Solver::new();
     solver.set_num_threads(4);
 
+    let start_of_source_iteration = Instant::now();
     for sources in SourceVecIter::new(required.len(), max_sources, program) {
         if let Some(facts_iter) = FactsFromSources::from_sources(sources.clone(), facts) {
             let use_sources = solver.new_var();
@@ -359,7 +361,15 @@ fn source_constant_vector<T>(required: Vec<Constant>,
     print_clause("use_at_least_one_set_of_sources",
                  &use_at_least_one_set_of_sources);
 
-    if solver.solve() != Lbool::True {
+    println!("number of variables: {}", solver.nvars());
+    println!("source iteration took {} seconds",
+             start_of_source_iteration.elapsed().as_secs());
+
+    let start_of_solving = Instant::now();
+    let solve_result = solver.solve();
+    println!("solving took {} seconds",
+             start_of_solving.elapsed().as_secs());
+    if solve_result != Lbool::True {
         return None;
     }
     for (sources, v) in sourceses.into_iter() {

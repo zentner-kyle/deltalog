@@ -1,56 +1,46 @@
-# Inlined virtual tables.
-enumerate(0, 0, 0).
-enumerate(0, 1, 1).
-enumerate(0, 2, 2).
-enumerate(1, 0, 3).
-enumerate(1, 1, 4).
-enumerate(1, 2, 5).
-enumerate(2, 0, 6).
-enumerate(2, 1, 7).
-enumerate(2, 2, 8).
+# Generic utilities
+inc(0, 1).
+inc(1, 2).
+inc(2, 3).
+inc(3, 4).
+inc(4, 5).
+inc(5, 6).
+inc(6, 7).
 
-not_eq(0, 1).
-not_eq(0, 2).
-not_eq(1, 0).
-not_eq(2, 0).
-not_eq(1, 2).
-not_eq(2, 1).
+any(X) :- inc(X, Y)
 
-eq(0, 0).
-eq(1, 1).
-eq(2, 2).
+less(X, Y) :- inc(X, Y)
+less(X, Y) :- inc(X, Z), less(Z, Y)
 
-# GameLog utils.
-piece(0).
-piece(1).
-
-not_eq_xy(X, Y, X1, Y1) :- not_eq(X, X1), not_eq(Y, Y1)
-not_eq_xy(X, Y, X1, Y1) :- not_eq(X, X1), eq(Y, Y1)
-not_eq_xy(X, Y, X1, Y1) :- not_eq(Y, Y1), eq(X, X1)
+ne(X, Y) :- ne(Y, X)
+ne(X, Y) :- less(X, Y)
+ne2(X1, Y1, X2, Y2) :- ne(X1, X2), any(Y1), any(Y2)
+ne2(X1, Y1, X2, Y2) :- ne(Y1, Y2), any(X1), any(X2)
 
 # Input
 
-
-weight(0.5)
+# player(P: 0 | 1)
+# move(X: [0-2], Y: [0-2])
+# board(X: [0-2], Y: [0-2], P | 2), where 2 means blank
 
 # TTT Logic
-next_board(E, X, Y, P) :-
+
+next_player(0) :- player(1)
+next_player(1) :- player(0)
+
+next_board(X, Y, P) :-
   board(X, Y, P),
-  piece(P),
-  enumerate(X1, Y1, E), 
-  not_eq_xy(X, Y, X1, Y1)
+  move(X1, Y1),
+  ne2(X, Y, X1, Y1)
 next_board(E, X, Y, P) :-
+  move(X, Y),
   board(X, Y, 2),
-  enumerate(X, Y, E),
-  turn(P)
-next_board(E, X, Y, 2) :-
-  board(X, Y, 2),
-  enumerate(X1, Y1, E), 
-  not_eq_xy(X, Y, X1, Y1)
+  player(P)
 
 
 sample
-  turn(0),
+  player(0),
+  move(0, 0),
   board(0, 0, 2),
   board(0, 1, 2),
   board(0, 2, 2),
@@ -62,90 +52,19 @@ sample
   board(2, 1, 2),
   board(2, 2, 2)
 output
-  next_board(0, 0, 0, 0),
-  next_board(0, 0, 1, 2),
-  next_board(0, 0, 2, 2),
-  next_board(0, 1, 0, 2),
-  next_board(0, 1, 1, 2),
-  next_board(0, 1, 2, 2),
-  next_board(0, 2, 0, 2),
-  next_board(0, 2, 1, 2),
-  next_board(0, 2, 2, 2),
-  next_board(1, 0, 0, 2),
-  next_board(1, 0, 1, 0),
-  next_board(1, 0, 2, 2),
-  next_board(1, 1, 0, 2),
-  next_board(1, 1, 1, 2),
-  next_board(1, 1, 2, 2),
-  next_board(1, 2, 0, 2),
-  next_board(1, 2, 1, 2),
-  next_board(1, 2, 2, 2),
-  next_board(2, 0, 0, 2),
-  next_board(2, 0, 1, 2),
-  next_board(2, 0, 2, 0),
-  next_board(2, 1, 0, 2),
-  next_board(2, 1, 1, 2),
-  next_board(2, 1, 2, 2),
-  next_board(2, 2, 0, 2),
-  next_board(2, 2, 1, 2),
-  next_board(2, 2, 2, 2),
-  next_board(3, 0, 0, 2),
-  next_board(3, 0, 1, 2),
-  next_board(3, 0, 2, 2),
-  next_board(3, 1, 0, 0),
-  next_board(3, 1, 1, 2),
-  next_board(3, 1, 2, 2),
-  next_board(3, 2, 0, 2),
-  next_board(3, 2, 1, 2),
-  next_board(3, 2, 2, 2),
-  next_board(4, 0, 0, 2),
-  next_board(4, 0, 1, 2),
-  next_board(4, 0, 2, 2),
-  next_board(4, 1, 0, 2),
-  next_board(4, 1, 1, 0),
-  next_board(4, 1, 2, 2),
-  next_board(4, 2, 0, 2),
-  next_board(4, 2, 1, 2),
-  next_board(4, 2, 2, 2),
-  next_board(5, 0, 0, 2),
-  next_board(5, 0, 1, 2),
-  next_board(5, 0, 2, 2),
-  next_board(5, 1, 0, 2),
-  next_board(5, 1, 1, 2),
-  next_board(5, 1, 2, 0),
-  next_board(5, 2, 0, 2),
-  next_board(5, 2, 1, 2),
-  next_board(5, 2, 2, 2),
-  next_board(6, 0, 0, 2),
-  next_board(6, 0, 1, 2),
-  next_board(6, 0, 2, 2),
-  next_board(6, 1, 0, 2),
-  next_board(6, 1, 1, 2),
-  next_board(6, 1, 2, 2),
-  next_board(6, 2, 0, 0),
-  next_board(6, 2, 1, 2),
-  next_board(6, 2, 2, 2),
-  next_board(7, 0, 0, 2),
-  next_board(7, 0, 1, 2),
-  next_board(7, 0, 2, 2),
-  next_board(7, 1, 0, 2),
-  next_board(7, 1, 1, 2),
-  next_board(7, 1, 2, 2),
-  next_board(7, 2, 0, 2),
-  next_board(7, 2, 1, 0),
-  next_board(7, 2, 2, 2),
-  next_board(8, 0, 0, 2),
-  next_board(8, 0, 1, 2),
-  next_board(8, 0, 2, 2),
-  next_board(8, 1, 0, 2),
-  next_board(8, 1, 1, 2),
-  next_board(8, 1, 2, 2),
-  next_board(8, 2, 0, 2),
-  next_board(8, 2, 1, 2),
-  next_board(8, 2, 2, 0).
+  next_board(0, 0, 0),
+  next_board(0, 1, 2),
+  next_board(0, 2, 2),
+  next_board(1, 0, 2),
+  next_board(1, 1, 2),
+  next_board(1, 2, 2),
+  next_board(2, 0, 2),
+  next_board(2, 1, 2),
+  next_board(2, 2, 2).
 
 sample
-  turn(1),
+  player(0),
+  move(1, 1),
   board(0, 0, 2),
   board(0, 1, 2),
   board(0, 2, 2),
@@ -157,83 +76,12 @@ sample
   board(2, 1, 2),
   board(2, 2, 2)
 output
-  next_board(0, 0, 0, 1),
-  next_board(0, 0, 1, 2),
-  next_board(0, 0, 2, 2),
-  next_board(0, 1, 0, 2),
-  next_board(0, 1, 1, 0),
-  next_board(0, 1, 2, 2),
-  next_board(0, 2, 0, 2),
-  next_board(0, 2, 1, 2),
-  next_board(0, 2, 2, 2),
-  next_board(1, 0, 0, 2),
-  next_board(1, 0, 1, 1),
-  next_board(1, 0, 2, 2),
-  next_board(1, 1, 0, 2),
-  next_board(1, 1, 1, 0),
-  next_board(1, 1, 2, 2),
-  next_board(1, 2, 0, 2),
-  next_board(1, 2, 1, 2),
-  next_board(1, 2, 2, 2),
-  next_board(2, 0, 0, 2),
-  next_board(2, 0, 1, 2),
-  next_board(2, 0, 2, 1),
-  next_board(2, 1, 0, 2),
-  next_board(2, 1, 1, 0),
-  next_board(2, 1, 2, 2),
-  next_board(2, 2, 0, 2),
-  next_board(2, 2, 1, 2),
-  next_board(2, 2, 2, 2),
-  next_board(3, 0, 0, 2),
-  next_board(3, 0, 1, 2),
-  next_board(3, 0, 2, 2),
-  next_board(3, 1, 0, 1),
-  next_board(3, 1, 1, 0),
-  next_board(3, 1, 2, 2),
-  next_board(3, 2, 0, 2),
-  next_board(3, 2, 1, 2),
-  next_board(3, 2, 2, 2),
-  next_board(4, 0, 0, 2),
-  next_board(4, 0, 1, 2),
-  next_board(4, 0, 2, 2),
-  next_board(4, 1, 0, 2),
-  next_board(4, 1, 2, 2),
-  next_board(4, 2, 0, 2),
-  next_board(4, 2, 1, 2),
-  next_board(4, 2, 2, 2),
-  next_board(5, 0, 0, 2),
-  next_board(5, 0, 1, 2),
-  next_board(5, 0, 2, 2),
-  next_board(5, 1, 0, 2),
-  next_board(5, 1, 1, 0),
-  next_board(5, 1, 2, 1),
-  next_board(5, 2, 0, 2),
-  next_board(5, 2, 1, 2),
-  next_board(5, 2, 2, 2),
-  next_board(6, 0, 0, 2),
-  next_board(6, 0, 1, 2),
-  next_board(6, 0, 2, 2),
-  next_board(6, 1, 0, 2),
-  next_board(6, 1, 1, 0),
-  next_board(6, 1, 2, 2),
-  next_board(6, 2, 0, 1),
-  next_board(6, 2, 1, 2),
-  next_board(6, 2, 2, 2),
-  next_board(7, 0, 0, 2),
-  next_board(7, 0, 1, 2),
-  next_board(7, 0, 2, 2),
-  next_board(7, 1, 0, 2),
-  next_board(7, 1, 1, 0),
-  next_board(7, 1, 2, 2),
-  next_board(7, 2, 0, 2),
-  next_board(7, 2, 1, 1),
-  next_board(7, 2, 2, 2),
-  next_board(8, 0, 0, 2),
-  next_board(8, 0, 1, 2),
-  next_board(8, 0, 2, 2),
-  next_board(8, 1, 0, 2),
-  next_board(8, 1, 1, 0),
-  next_board(8, 1, 2, 2),
-  next_board(8, 2, 0, 2),
-  next_board(8, 2, 1, 2),
-  next_board(8, 2, 2, 1).
+  next_board(0, 0, 2),
+  next_board(0, 1, 2),
+  next_board(0, 2, 2),
+  next_board(1, 0, 2),
+  next_board(1, 1, 0),
+  next_board(1, 2, 2),
+  next_board(2, 0, 2),
+  next_board(2, 1, 2),
+  next_board(2, 2, 2).

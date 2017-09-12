@@ -329,23 +329,36 @@ pub fn sample<'a, 'b, T>(source: &'a str,
 }
 
 
-pub fn program<T>(source: &str)
-                  -> Result<(FactTable<T>, Program<T>, Vec<(FactTable<T>, FactTable<T>)>)>
+#[allow(dead_code)]
+pub fn datalog<'s, 'p, T>
+    (source: &'s str,
+     program: &mut Program<T>)
+     -> std::result::Result<(FactTable<T>, Vec<(FactTable<T>, FactTable<T>)>), Error<'s>>
+    where T: TruthValue
+{
+    match datalog_inner(source, program) {
+        Ok((result, _)) => Ok(result),
+        Err(e) => Err(e),
+    }
+}
+
+fn datalog_inner<'s, 'p, T>(source: &'s str,
+                            program: &mut Program<T>)
+                            -> Result<'s, (FactTable<T>, Vec<(FactTable<T>, FactTable<T>)>)>
     where T: TruthValue
 {
     let mut rest = source;
     let mut facts = FactTable::new();
-    let mut program = Program::new();
     let mut current_weight = T::dual_default();
     let mut current_confidence = T::default();
     let mut samples: Vec<(FactTable<T>, FactTable<T>)> = Vec::new();
-    let mut predicate_names = NameTable::new();
+    let mut predicate_names = program.predicate_names().clone();
     loop {
         rest = skip_whitespace(rest);
         if rest.len() == 0 {
             facts.extend_num_predicates(program.num_predicates());
             *program.predicate_names_mut() = predicate_names;
-            return Ok(((facts, program, samples), rest));
+            return Ok(((facts, samples), rest));
         }
         let start_of_clause = rest;
         if let Ok((sample, r)) = sample(rest, &mut predicate_names) {
@@ -418,6 +431,18 @@ pub fn program<T>(source: &str)
         } else {
             return err_msg("Unterminated clause", start_of_clause);
         }
+    }
+}
+
+
+pub fn program<T>(source: &str)
+                  -> Result<(FactTable<T>, Program<T>, Vec<(FactTable<T>, FactTable<T>)>)>
+    where T: TruthValue
+{
+    let mut program = Program::new();
+    match datalog_inner(source, &mut program) {
+        Ok(((facts, samples), rest)) => Ok(((facts, program, samples), rest)),
+        Err(e) => Err(e),
     }
 }
 

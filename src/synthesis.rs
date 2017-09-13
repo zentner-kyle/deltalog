@@ -249,9 +249,15 @@ fn violated_constraint_literals(solver: &mut Solver,
 
     let mut result = Vec::new();
     for (source_idx_a, fact_a) in facts.iter().enumerate() {
-        for (term_idx_a, a) in fact_a.terms.iter().enumerate() {
-            for (source_idx_b, fact_b) in facts.iter().enumerate().skip(source_idx_a) {
-                for (term_idx_b, b) in fact_b.terms.iter().enumerate() {
+        for (source_idx_b, fact_b) in facts.iter().enumerate().skip(source_idx_a) {
+            for (term_idx_a, a) in fact_a.terms.iter().enumerate() {
+                let to_skip;
+                if source_idx_a == source_idx_b {
+                    to_skip = term_idx_a + 1;
+                } else {
+                    to_skip = 0;
+                }
+                for (term_idx_b, b) in fact_b.terms.iter().enumerate().skip(to_skip) {
                     if a != b {
                         let source_term_a = SourceTerm {
                             source_idx: source_idx_a,
@@ -403,21 +409,28 @@ fn create_clause<T>(program: &Program<T>,
     let mut num_variables_so_far = sources.len();
     let mut body: Vec<Literal> = Vec::new();
     for (source_idx, source) in sources.iter().cloned().enumerate() {
-        let mut terms = Vec::with_capacity(program.get_num_terms(source.predicate));
+        let terms = Vec::with_capacity(program.get_num_terms(source.predicate));
+        body.push(Literal::new_from_vec(source.predicate, terms));
         for term_idx in 0..program.get_num_terms(source.predicate) {
-            if term_idx == source.term_idx {
-                terms.push(Term::Variable(term_idx));
-            } else if let Some(back_ref) = back_refs.get(&SourceTerm {
-                                                              source_idx,
-                                                              term_idx,
-                                                          }) {
-                terms.push(body[back_ref.source_idx].terms[back_ref.term_idx]);
+            if let Some(back_ref) = back_refs.get(&SourceTerm {
+                                                       source_idx,
+                                                       term_idx,
+                                                   }) {
+                let referred_to = body[back_ref.source_idx].terms[back_ref.term_idx];
+                body.last_mut().unwrap().terms.push(referred_to);
+            } else if term_idx == source.term_idx {
+                body.last_mut()
+                    .unwrap()
+                    .terms
+                    .push(Term::Variable(source_idx));
             } else {
-                terms.push(Term::Variable(term_idx + num_variables_so_far));
+                body.last_mut()
+                    .unwrap()
+                    .terms
+                    .push(Term::Variable(num_variables_so_far));
                 num_variables_so_far += 1;
             }
         }
-        body.push(Literal::new_from_vec(source.predicate, terms));
     }
     Clause::new_from_vec(head, body)
 }

@@ -298,6 +298,118 @@ fn print_clause(name: &str, literals: &[Lit]) {
 #[cfg(not(test))]
 fn print_clause(_name: &str, _literals: &[Lit]) {}
 
+struct SynthesisState {
+    source_permutation_vars: HashMap<Vec<Source>, Lit>,
+    equality_constraint_vars: HashMap<EqualityConstraint, Lit>,
+    solver: Solver,
+}
+
+impl SynthesisState {
+    fn new() -> Self {
+        let mut solver = Solver::new();
+        solver.set_num_threads(4);
+        SynthesisState {
+            source_permutation_vars: HashMap::new(),
+            equality_constraint_vars: HashMap::new(),
+            solver,
+        }
+    }
+
+    fn require_constant_vector<T>(&mut self,
+                                  required: Vec<Constant>,
+                                  forbidden: HashSet<Vec<Constant>>,
+                                  program: &Program<T>,
+                                  facts: &FactTable<T>,
+                                  max_sources: usize)
+        where T: TruthValue
+    {
+        let start_of_source_iteration = Instant::now();
+        for sources in SourceVecIter::new(required.len(), max_sources, program) {
+            if let Some(facts_iter) = FactsFromSources::from_sources(sources.clone(), facts) {
+                let use_sources = self.solver.new_var();
+                let mut unavoidable_forbidden = false;
+                let mut has_required = false;
+                for facts in facts_iter {
+                    let violated_constraints =
+                        violated_constraint_literals(&mut self.solver,
+                                                     &mut self.equality_constraint_vars,
+                                                     &facts);
+                    let constant_vec = constant_vec_from_sources_facts(&sources, &facts);
+                    let constant_vec_prefix = &constant_vec[0..required.len()];
+                    if required == constant_vec_prefix {
+                        has_required = true;
+                        // if use_sources, no violated EqualityConstraint
+                        for constraint_lit in violated_constraints.iter() {
+                            // Either:
+                            // - Don't use the source
+                            // - Don't violate the constraint
+                            self.solver
+                                .add_clause(&[!use_sources, constraint_lit.clone()]);
+                            print_clause("required", &[!use_sources, constraint_lit.clone()]);
+                        }
+                    }
+                    if forbidden.contains(constant_vec_prefix) {
+                        let mut clause = violated_constraints;
+                        if clause.len() == 0 {
+                            unavoidable_forbidden = true;
+                            break;
+                        } else {
+                            clause.push(!use_sources);
+                            // Either:
+                            // - Don't use the source
+                            // - Violate one of the constraints
+                            self.solver.add_clause(&clause);
+                            print_clause("forbidden", &clause);
+                        }
+                    }
+                }
+                if has_required && !unavoidable_forbidden {
+                    self.source_permutation_vars
+                        .insert(sources.as_ref().to_owned(), use_sources);
+                }
+            }
+        }
+        println!("number of variables: {}", self.solver.nvars());
+        println!("source iteration took {} seconds",
+                 start_of_source_iteration.elapsed().as_secs());
+    }
+
+    fn solve(mut self) -> Option<(Vec<Source>, Vec<EqualityConstraint>)> {
+        if self.source_permutation_vars.len() == 0 {
+            return None;
+        }
+
+        let use_at_least_one_set_of_sources = self.source_permutation_vars
+            .iter()
+            .map(|(_, &lit)| lit)
+            .collect::<Vec<_>>();
+        self.solver.add_clause(&use_at_least_one_set_of_sources);
+
+        print_clause("use_at_least_one_set_of_sources",
+                     &use_at_least_one_set_of_sources);
+
+        let start_of_solving = Instant::now();
+        let solve_result = self.solver.solve();
+        println!("solving took {} seconds",
+                 start_of_solving.elapsed().as_secs());
+        if solve_result != Lbool::True {
+            return None;
+        }
+
+        let solver = &self.solver;
+        let constraints = self.equality_constraint_vars
+            .iter()
+            .filter_map(|(&c, &v)| if solver.is_true(v) { Some(c) } else { None })
+            .collect();
+        for (sources, v) in self.source_permutation_vars.into_iter() {
+            if self.solver.is_true(v) {
+                return Some((sources.to_owned(), constraints));
+            }
+        }
+        return None;
+    }
+}
+
 fn source_constant_vector<T>(required: Vec<Constant>,
                              forbidden: HashSet<Vec<Constant>>,
                              program: &Program<T>,
@@ -306,88 +418,9 @@ fn source_constant_vector<T>(required: Vec<Constant>,
                              -> Option<(Vec<Source>, Vec<EqualityConstraint>)>
     where T: TruthValue
 {
-    let mut sourceses: Vec<(Arc<Vec<Source>>, Lit)> = Vec::new();
-    let mut equality_constraints: HashMap<EqualityConstraint, Lit> = HashMap::new();
-    let mut solver = Solver::new();
-    solver.set_num_threads(4);
-
-    let start_of_source_iteration = Instant::now();
-    for sources in SourceVecIter::new(required.len(), max_sources, program) {
-        if let Some(facts_iter) = FactsFromSources::from_sources(sources.clone(), facts) {
-            let use_sources = solver.new_var();
-            let mut unavoidable_forbidden = false;
-            let mut has_required = false;
-            for facts in facts_iter {
-                let violated_constraints =
-                    violated_constraint_literals(&mut solver, &mut equality_constraints, &facts);
-                let constant_vec = constant_vec_from_sources_facts(&sources, &facts);
-                let constant_vec_prefix = &constant_vec[0..required.len()];
-                if required == constant_vec_prefix {
-                    has_required = true;
-                    // if use_sources, no violated EqualityConstraint
-                    for constraint_lit in violated_constraints.iter() {
-                        // Either:
-                        // - Don't use the source
-                        // - Don't violate the constraint
-                        solver.add_clause(&[!use_sources, constraint_lit.clone()]);
-                        print_clause("required", &[!use_sources, constraint_lit.clone()]);
-                    }
-                }
-                if forbidden.contains(constant_vec_prefix) {
-                    let mut clause = violated_constraints;
-                    if clause.len() == 0 {
-                        unavoidable_forbidden = true;
-                        break;
-                    } else {
-                        clause.push(!use_sources);
-                        // Either:
-                        // - Don't use the source
-                        // - Violate one of the constraints
-                        solver.add_clause(&clause);
-                        print_clause("forbidden", &clause);
-                    }
-                }
-            }
-            if has_required && !unavoidable_forbidden {
-                sourceses.push((sources.clone(), use_sources));
-            }
-        }
-    }
-
-    if sourceses.len() == 0 {
-        return None;
-    }
-
-    let use_at_least_one_set_of_sources = sourceses
-        .iter()
-        .map(|&(_, lit)| lit)
-        .collect::<Vec<_>>();
-    solver.add_clause(&use_at_least_one_set_of_sources);
-
-    print_clause("use_at_least_one_set_of_sources",
-                 &use_at_least_one_set_of_sources);
-
-    println!("number of variables: {}", solver.nvars());
-    println!("source iteration took {} seconds",
-             start_of_source_iteration.elapsed().as_secs());
-
-    let start_of_solving = Instant::now();
-    let solve_result = solver.solve();
-    println!("solving took {} seconds",
-             start_of_solving.elapsed().as_secs());
-    if solve_result != Lbool::True {
-        return None;
-    }
-    for (sources, v) in sourceses.into_iter() {
-        if solver.is_true(v) {
-            let constraints = equality_constraints
-                .iter()
-                .filter_map(|(&c, &v)| if solver.is_true(v) { Some(c) } else { None })
-                .collect();
-            return Some((sources.as_ref().clone(), constraints));
-        }
-    }
-    return None;
+    let mut state = SynthesisState::new();
+    state.require_constant_vector(required, forbidden, program, facts, max_sources);
+    return state.solve();
 }
 
 fn create_clause<T>(program: &Program<T>,

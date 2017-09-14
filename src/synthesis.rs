@@ -281,23 +281,6 @@ fn violated_constraint_literals(solver: &mut Solver,
     return result;
 }
 
-#[cfg(test)]
-fn print_clause(name: &str, literals: &[Lit]) {
-    print!("clause({}):", name);
-    for lit in literals {
-        if lit.isneg() {
-            print!(" -");
-        } else {
-            print!(" ");
-        }
-        print!("{}", lit.var());
-    }
-    println!();
-}
-
-#[cfg(not(test))]
-fn print_clause(_name: &str, _literals: &[Lit]) {}
-
 struct SynthesisState {
     source_permutation_vars: HashMap<Vec<Source>, Lit>,
     equality_constraint_vars: HashMap<EqualityConstraint, Lit>,
@@ -320,16 +303,18 @@ impl SynthesisState {
                                   forbidden: &HashSet<Vec<Constant>>,
                                   program: &Program<T>,
                                   facts: &FactTable<T>,
+                                  min_sources: usize,
                                   max_sources: usize)
         where T: TruthValue
     {
         let start_of_source_iteration = Instant::now();
-        for sources in SourceVecIter::new(required.len(), max_sources, program) {
+        for sources in SourceVecIter::new(min_sources, max_sources, program) {
             let use_sources = match self.source_permutation_vars
                       .entry(sources.as_ref().clone()) {
                 Entry::Occupied(entry) => entry.get().clone(),
                 Entry::Vacant(entry) => entry.insert(self.solver.new_var()).clone(),
             };
+            let mut had_required = false;
             if let Some(facts_iter) = FactsFromSources::from_sources(sources.clone(), facts) {
                 for facts in facts_iter {
                     let violated_constraints =
@@ -345,9 +330,9 @@ impl SynthesisState {
                             // - Don't use the source
                             // - Don't violate the constraint
                             self.solver
-                                .add_clause(&[!use_sources, constraint_lit.clone()]);
-                            print_clause("required", &[!use_sources, constraint_lit.clone()]);
+                                .add_clause(&[!use_sources, !constraint_lit.clone()]);
                         }
+                        had_required = true;
                     }
                     if forbidden.contains(constant_vec_prefix) {
                         let mut clause = violated_constraints;
@@ -360,10 +345,12 @@ impl SynthesisState {
                             // - Don't use the source
                             // - Violate one of the constraints
                             self.solver.add_clause(&clause);
-                            print_clause("forbidden", &clause);
                         }
                     }
                 }
+            }
+            if !had_required {
+                self.solver.add_clause(&[!use_sources]);
             }
         }
         println!("number of variables: {}", self.solver.nvars());
@@ -382,9 +369,6 @@ impl SynthesisState {
             .collect::<Vec<_>>();
         self.solver.add_clause(&use_at_least_one_set_of_sources);
 
-        print_clause("use_at_least_one_set_of_sources",
-                     &use_at_least_one_set_of_sources);
-
         let start_of_solving = Instant::now();
         let solve_result = self.solver.solve();
         println!("solving took {} seconds",
@@ -398,6 +382,16 @@ impl SynthesisState {
             .iter()
             .filter_map(|(&c, &v)| if solver.is_true(v) { Some(c) } else { None })
             .collect();
+        let sources = self.source_permutation_vars
+            .iter()
+            .filter_map(|(s, &v)| if solver.is_true(v) {
+                            Some(s.clone())
+                        } else {
+                            None
+                        })
+            .collect::<Vec<_>>();
+        println!("sources = {:?}", sources);
+
         for (sources, v) in self.source_permutation_vars.into_iter() {
             if self.solver.is_true(v) {
                 return Some((sources.to_owned(), constraints));
@@ -416,7 +410,12 @@ fn source_constant_vector<T>(required: Vec<Constant>,
     where T: TruthValue
 {
     let mut state = SynthesisState::new();
-    state.require_constant_vector(&required, &forbidden, program, facts, max_sources);
+    state.require_constant_vector(&required,
+                                  &forbidden,
+                                  program,
+                                  facts,
+                                  max_sources,
+                                  max_sources);
     return state.solve();
 }
 
@@ -435,6 +434,7 @@ fn create_clause<T>(program: &Program<T>,
     for EqualityConstraint(first, second) in equality_constraints.iter().cloned() {
         back_refs.insert(second, first);
     }
+    println!("back_refs = {:?}", back_refs);
 
     let mut num_variables_so_far = sources.len();
     let mut body: Vec<Literal> = Vec::new();
@@ -474,11 +474,43 @@ fn create_clause<T>(program: &Program<T>,
     Clause::new_from_vec(head, body)
 }
 
+fn synthesize_clause<T>(program: &mut Program<T>,
+                        output_predicate: usize,
+                        output_num_terms: usize,
+                        output_num_sources: usize,
+                        io_pairs: &[(FactTable<T>, (Vec<Constant>, Vec<Vec<Constant>>))])
+                        -> Clause
+    where T: TruthValue
+{
+    let mut state = SynthesisState::new();
+    for &(ref input, ref output) in io_pairs {
+        let required = &output.0;
+        let forbidden = output.1.iter().cloned().collect();
+        state.require_constant_vector(required,
+                                      &forbidden,
+                                      program,
+                                      input,
+                                      output_num_sources,
+                                      output_num_sources);
+    }
+    let (sources, constraints) = state.solve().unwrap();
+
+    println!("sources = {:?}", sources);
+    println!("constraints = {:?}", constraints);
+    let result_clause = create_clause(program,
+                                      output_predicate,
+                                      output_num_terms,
+                                      &sources,
+                                      &constraints);
+    program.push_clause_simple(result_clause.clone());
+    return result_clause;
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use parser::{facts_and_program, program_lit};
+    use bottom_up::evaluate_bottom_up;
+    use parser::{datalog, facts_and_program, program_lit};
 
     fn check_source_tuples(mut iter: SourceVecIter<()>,
                            source_tuples: &[Vec<(Predicate, usize)>]) {
@@ -745,5 +777,151 @@ mod tests {
                                   vec![Literal::new_from_vec(1, vec![Term::Variable(0)]),
                                        Literal::new_from_vec(0, vec![Term::Variable(0)])])];
         assert!(expected_clauses.contains(&result_clause));
+    }
+
+    #[test]
+    fn synth_piece_down() {
+        let (input_0, mut prg) = facts_and_program(r"
+            player(0).
+            move(1).
+            board(0, 2).
+            board(1, 2).
+        ");
+
+        let output_0 = (vec![1, 0], vec![vec![1, 2], vec![1, 1]]);
+
+
+        let (input_1, _) = datalog(r"
+            player(1).
+            move(1).
+            board(0, 2).
+            board(1, 2).
+        ",
+                                   &mut prg)
+                .unwrap();
+
+        let output_1 = (vec![1, 1], vec![vec![1, 0], vec![1, 2]]);
+
+        let (input_2, _) = datalog(r"
+            player(1).
+            move(0).
+            board(0, 2).
+            board(1, 2).
+        ",
+                                   &mut prg)
+                .unwrap();
+
+        let output_2 = (vec![0, 1], vec![vec![0, 0], vec![0, 2]]);
+
+        let (input_3, _) = datalog(r"
+            player(0).
+            move(0).
+            board(0, 2).
+            board(1, 2).
+        ",
+                                   &mut prg)
+                .unwrap();
+
+        let output_3 = (vec![0, 0], vec![vec![0, 1], vec![0, 2]]);
+
+        let result_clause = synthesize_clause(&mut prg,
+                                              3,
+                                              2,
+                                              2,
+                                              &[(input_0, output_0),
+                                                (input_1, output_1),
+                                                (input_2, output_2),
+                                                (input_3, output_3)]);
+        let expected_clause =
+            Clause::new_from_vec(Literal::new_from_vec(3,
+                                                       vec![Term::Variable(0), Term::Variable(1)]),
+                                 vec![Literal::new_from_vec(1, vec![Term::Variable(0)]),
+                                      Literal::new_from_vec(0, vec![Term::Variable(1)])]);
+        println!("clause = {:?}", result_clause);
+        println!("correct clause = {:?}", expected_clause);
+        println!("{}", prg);
+        assert_eq!(result_clause, expected_clause);
+    }
+
+    #[test]
+    fn synth_mini_ttt_no_rule_breaking() {
+        let (input_0, mut prg) = facts_and_program(r"
+            player(0).
+            move(1, 1).
+            board(0, 0, 2).
+            board(0, 1, 2).
+            board(1, 0, 2).
+            board(1, 1, 2).
+            blank(2).
+        ");
+
+        let output_0 = (vec![1, 1, 0], vec![vec![1, 1, 1], vec![1, 1, 2]]);
+
+
+        let (input_1, _) = datalog(r"
+            player(1).
+            move(0, 1).
+            board(0, 0, 2).
+            board(0, 1, 2).
+            board(1, 0, 2).
+            board(1, 1, 2).
+            blank(2).
+        ",
+                                   &mut prg)
+                .unwrap();
+
+        let output_1 = (vec![0, 1, 1], vec![vec![0, 1, 0], vec![0, 1, 2]]);
+
+        let (input_2, _) = datalog(r"
+            player(1).
+            move(0, 0).
+            board(0, 0, 2).
+            board(0, 1, 2).
+            board(1, 0, 2).
+            board(1, 1, 2).
+            blank(2).
+        ",
+                                   &mut prg)
+                .unwrap();
+
+        let output_2 = (vec![0, 0, 1], vec![vec![0, 0, 0], vec![0, 1, 2]]);
+
+        let (input_3, _) = datalog(r"
+            player(0).
+            move(0, 1).
+            board(0, 0, 2).
+            board(0, 1, 2).
+            board(1, 0, 2).
+            board(1, 1, 2).
+            blank(2).
+        ",
+                                   &mut prg)
+                .unwrap();
+
+        let output_3 = (vec![0, 1, 0], vec![vec![0, 1, 1], vec![0, 1, 2]]);
+
+        let result_clause = synthesize_clause(&mut prg,
+                                              4,
+                                              3,
+                                              3,
+                                              &[(input_0, output_0),
+                                                (input_1, output_1),
+                                                (input_2, output_2),
+                                                (input_3, output_3)]);
+        let expected_clause = Clause::new_from_vec(Literal::new_from_vec(4,
+                                                                         vec![Term::Variable(0),
+                                                                              Term::Variable(1),
+                                                                              Term::Variable(2)]),
+                                                   vec![Literal::new_from_vec(1,
+                                                            vec![Term::Variable(0),
+                                                                 Term::Variable(3)]),
+                                      Literal::new_from_vec(1,
+                                                            vec![Term::Variable(4),
+                                                                 Term::Variable(1)]),
+                                      Literal::new_from_vec(0, vec![Term::Variable(2)])]);
+        println!("clause = {:?}", result_clause);
+        println!("correct clause = {:?}", expected_clause);
+        println!("{}", prg);
+        assert_eq!(result_clause, expected_clause);
     }
 }

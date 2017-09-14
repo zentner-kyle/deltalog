@@ -316,8 +316,8 @@ impl SynthesisState {
     }
 
     fn require_constant_vector<T>(&mut self,
-                                  required: Vec<Constant>,
-                                  forbidden: HashSet<Vec<Constant>>,
+                                  required: &[Constant],
+                                  forbidden: &HashSet<Vec<Constant>>,
                                   program: &Program<T>,
                                   facts: &FactTable<T>,
                                   max_sources: usize)
@@ -325,10 +325,12 @@ impl SynthesisState {
     {
         let start_of_source_iteration = Instant::now();
         for sources in SourceVecIter::new(required.len(), max_sources, program) {
+            let use_sources = match self.source_permutation_vars
+                      .entry(sources.as_ref().clone()) {
+                Entry::Occupied(entry) => entry.get().clone(),
+                Entry::Vacant(entry) => entry.insert(self.solver.new_var()).clone(),
+            };
             if let Some(facts_iter) = FactsFromSources::from_sources(sources.clone(), facts) {
-                let use_sources = self.solver.new_var();
-                let mut unavoidable_forbidden = false;
-                let mut has_required = false;
                 for facts in facts_iter {
                     let violated_constraints =
                         violated_constraint_literals(&mut self.solver,
@@ -337,7 +339,6 @@ impl SynthesisState {
                     let constant_vec = constant_vec_from_sources_facts(&sources, &facts);
                     let constant_vec_prefix = &constant_vec[0..required.len()];
                     if required == constant_vec_prefix {
-                        has_required = true;
                         // if use_sources, no violated EqualityConstraint
                         for constraint_lit in violated_constraints.iter() {
                             // Either:
@@ -351,7 +352,7 @@ impl SynthesisState {
                     if forbidden.contains(constant_vec_prefix) {
                         let mut clause = violated_constraints;
                         if clause.len() == 0 {
-                            unavoidable_forbidden = true;
+                            self.solver.add_clause(&[!use_sources]);
                             break;
                         } else {
                             clause.push(!use_sources);
@@ -362,10 +363,6 @@ impl SynthesisState {
                             print_clause("forbidden", &clause);
                         }
                     }
-                }
-                if has_required && !unavoidable_forbidden {
-                    self.source_permutation_vars
-                        .insert(sources.as_ref().to_owned(), use_sources);
                 }
             }
         }
@@ -419,7 +416,7 @@ fn source_constant_vector<T>(required: Vec<Constant>,
     where T: TruthValue
 {
     let mut state = SynthesisState::new();
-    state.require_constant_vector(required, forbidden, program, facts, max_sources);
+    state.require_constant_vector(&required, &forbidden, program, facts, max_sources);
     return state.solve();
 }
 
@@ -432,8 +429,8 @@ fn create_clause<T>(program: &Program<T>,
     where T: TruthValue
 {
     let num_output_vars = output_num_terms;
-    let head = Literal::new_from_vec(output_predicate,
-                                     (0..num_output_vars).map(|t| Term::Variable(t)).collect());
+    let mut head = Literal::new_from_vec(output_predicate,
+                                         (0..num_output_vars).map(|t| Term::Variable(t)).collect());
     let mut back_refs = HashMap::new();
     for EqualityConstraint(first, second) in equality_constraints.iter().cloned() {
         back_refs.insert(second, first);
@@ -445,17 +442,26 @@ fn create_clause<T>(program: &Program<T>,
         let terms = Vec::with_capacity(program.get_num_terms(source.predicate));
         body.push(Literal::new_from_vec(source.predicate, terms));
         for term_idx in 0..program.get_num_terms(source.predicate) {
-            if let Some(back_ref) = back_refs.get(&SourceTerm {
-                                                       source_idx,
-                                                       term_idx,
-                                                   }) {
+            if term_idx == source.term_idx {
+                if let Some(back_ref) = back_refs.get(&SourceTerm {
+                                                           source_idx,
+                                                           term_idx,
+                                                       }) {
+                    let referred_to = body[back_ref.source_idx].terms[back_ref.term_idx];
+                    head.terms[source_idx] = referred_to;
+                } else {
+                    body.last_mut()
+                        .unwrap()
+                        .terms
+                        .push(Term::Variable(source_idx));
+                }
+
+            } else if let Some(back_ref) = back_refs.get(&SourceTerm {
+                                                              source_idx,
+                                                              term_idx,
+                                                          }) {
                 let referred_to = body[back_ref.source_idx].terms[back_ref.term_idx];
                 body.last_mut().unwrap().terms.push(referred_to);
-            } else if term_idx == source.term_idx {
-                body.last_mut()
-                    .unwrap()
-                    .terms
-                    .push(Term::Variable(source_idx));
             } else {
                 body.last_mut()
                     .unwrap()
